@@ -43,7 +43,7 @@ mkdir -p "$BUILD_DIR"
 
 TMP_DIR="$(mktemp -d)"
 ARCHIVE_NAME="${APP_NAME}_v${VERSION}.zip"
-ARCHIVE_PATH="$BUILD_DIR/$ARCHIVE_NAME"
+ARCHIVE_PATH="$(pwd)/$BUILD_DIR/$ARCHIVE_NAME"
 
 # Export source from tags
 git archive "$TAG" | tar -x -C "$TMP_DIR"
