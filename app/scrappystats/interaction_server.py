@@ -63,8 +63,8 @@ COMMANDS = [
 
 @app.on_event("startup")
 async def on_startup():
-    register_commands(COMMANDS)
     log.info("Interaction server started, version %s", __version__)
+
 
 @app.post("/discord/interactions")
 async def interactions(request: Request):

@@ -2,7 +2,7 @@
 set -e
 
 export COMPOSE_PROJECT_NAME=scrappystats
-BASE_DIR="/root/docker/scrappystats"
+BASE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 RELEASES="$BASE_DIR/releases"
 
 cd "$BASE_DIR"
@@ -54,7 +54,7 @@ echo "🔁 Switching current symlink"
 ln -sfn "$TARGET" "$BASE_DIR/current"
 
 # ---- BUILD & RUN FROM CURRENT ----
-cd "$BASE_DIR/current"
+### cd "$BASE_DIR/current"
 
 echo "🐳 Building image"
 docker compose build scrappystats
