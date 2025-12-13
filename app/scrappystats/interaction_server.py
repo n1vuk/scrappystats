@@ -1,6 +1,3 @@
-from .utils import load_alliances, load_json, utcnow, parse_iso, make_table
-#from .legacy import events_path, state_path
-
 import logging
 from datetime import timedelta
 
@@ -10,9 +7,9 @@ from fastapi.responses import JSONResponse
 from .discord_utils import verify_signature, interaction_response, pong, register_commands
 from .version import __version__
 #from .utils import load_alliances, load_json, 
-
+from .utils import load_alliances, load_json, utcnow, parse_iso, make_table
+#from .legacy import events_path, state_path
 from .legacy import events_path, state_path
- utcnow, parse_iso, make_table
 from .report_common import compute_deltas, load_state_and_baseline
 
 from .commands.interactions import handle_fullroster, handle_service_record
@@ -411,9 +408,8 @@ def alliance_summary_report() -> str:
     for role, count in sorted(ranks.items(), key=lambda kv: kv[0]):
         lines.append(f"  • {role}: {count}")
     return "\n".join(lines)
-
-    if __name__ == "__main__":
-    import uvicorn
+    
+if __name__ == "__main__":
     uvicorn.run(
         "scrappystats.interaction_server:app",
         host="0.0.0.0",
