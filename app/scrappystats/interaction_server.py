@@ -7,10 +7,10 @@ from fastapi.responses import JSONResponse
 from .discord_utils import verify_signature, interaction_response, pong, register_commands
 from .version import __version__
 #from .utils import load_alliances, load_json, 
-from .utils import load_alliances, load_json, utcnow, parse_iso, make_table
+from .utils import load_alliances, load_json, utcnow, parse_iso
 #from .legacy import events_path, state_path
 from .legacy import events_path, state_path
-from .report_common import compute_deltas, load_state_and_baseline
+from .report_common import compute_deltas, load_state_and_baseline, make_table
 
 from .commands.interactions import handle_fullroster, handle_service_record
 

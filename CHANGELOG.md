@@ -131,3 +131,5 @@
 ## v2.1.20
 - fixed deploy script not being executable
 
+## v2.1.24
+- fixed missing report table function
