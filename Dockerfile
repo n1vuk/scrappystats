@@ -5,6 +5,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+COPY VERSION /app/VERSION
+COPY app/scrappystats ./scrappystats
 ENV PYTHONPATH=/app
 
 COPY requirements.txt /app/requirements.txt
