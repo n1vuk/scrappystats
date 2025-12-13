@@ -409,10 +409,11 @@ def alliance_summary_report() -> str:
         lines.append(f"  • {role}: {count}")
     return "\n".join(lines)
     
-if __name__ == "__main__":
-    uvicorn.run(
-        "scrappystats.interaction_server:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=False,
-    )
+## moved to supervisord v2.1.25
+## if __name__ == "__main__":
+##    uvicorn.run(
+##        "scrappystats.interaction_server:app",
+##        host="0.0.0.0",
+##        port=8000,
+##        reload=False,
+##    )

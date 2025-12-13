@@ -133,3 +133,8 @@
 
 ## v2.1.24
 - fixed missing report table function
+
+## v2.1.25 
+- Fix: remove embedded uvicorn startup from interaction_server
+
+
