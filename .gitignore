@@ -1,0 +1,43 @@
+# --------------------
+# Build artifacts
+# --------------------
+dist/
+*.zip
+
+# --------------------
+# Python
+# --------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.env
+.venv/
+venv/
+
+# --------------------
+# Logs & runtime
+# --------------------
+logs/
+*.log
+
+# --------------------
+# OS / editor junk
+# --------------------
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# --------------------
+# Docker
+# --------------------
+*.pid
+
+# --------------------
+# Backups / temp
+# --------------------
+app.BACKUP.*
+update_backups/
