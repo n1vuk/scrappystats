@@ -127,3 +127,7 @@
 ## v2.1.19
 - tweak to deploy script
 - fixed discord services not starting
+
+## v2.1.20
+- fixed deploy script not being executable
+
