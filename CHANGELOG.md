@@ -123,3 +123,7 @@
 - Fix deployment when running Docker Compose from symlinked `current`
 - Pin Docker Compose project name to prevent container name conflicts
 - No application code changes
+
+## v2.1.19
+- tweak to deploy script
+- fixed discord services not starting
