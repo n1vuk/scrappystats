@@ -1,9 +1,11 @@
 services:
   scrappystats:
     build:
-      context: .
+      context: ./current
       dockerfile: Dockerfile
     container_name: scrappystats
+    env_file: 
+      - .env
     volumes:
       - ./config:/config
     restart: unless-stopped
