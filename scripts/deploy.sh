@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
+export COMPOSE_PROJECT_NAME=scrappystats
 BASE_DIR="/root/docker/scrappystats"
 RELEASES="$BASE_DIR/releases"
 

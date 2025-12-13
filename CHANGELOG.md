@@ -119,3 +119,7 @@
 - Fixed release packaging so VERSION inside build artifacts always matches the Git tag.
 - Hardened release build script to reliably produce zip artifacts from tagged commits.
 
+## v2.1.18
+- Fix deployment when running Docker Compose from symlinked `current`
+- Pin Docker Compose project name to prevent container name conflicts
+- No application code changes
