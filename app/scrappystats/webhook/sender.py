@@ -1,40 +1,51 @@
-
-"""Simple webhook sender for ScrappyStats v2.0.0-dev."""
+import logging
 import os
 import requests
+from typing import Optional
+
+log = logging.getLogger("scrappystats.webhook")
+
+DEFAULT_TIMEOUT = 10
 
 
-_WEBHOOK_ENV_VARS = [
-    "SCRAPPYSTATS_WEBHOOK_URL",
-    "DISCORD_WEBHOOK_URL",
-]
-
-
-def _get_webhook_url() -> str | None:
-    for name in _WEBHOOK_ENV_VARS:
-        url = os.getenv(name)
-        if url:
-            return url
-    return None
+def _get_webhook_url() -> Optional[str]:
+    """
+    Returns the configured webhook URL or None if not set.
+    """
+    return os.getenv("SCRAPPYSTATS_WEBHOOK_URL")
 
 
 def post_webhook_message(content: str) -> None:
-    """Post a simple text message to the configured webhook URL.
+    """
+    Post a plain-text message to the configured webhook.
 
-    If no webhook URL is configured, this function logs and returns
-    without raising an exception.
+    This is the ONLY supported webhook send path.
+    All callers must use this function.
     """
     url = _get_webhook_url()
+
     if not url:
-        print("[webhook.sender] No webhook URL configured; skipping message.")
+        log.warning("[webhook] No webhook URL configured; skipping message")
         return
 
-    payload = {"content": content}
+    payload = {
+        "content": content
+    }
+
     try:
-        resp = requests.post(url, json=payload, timeout=10)
-    except Exception as exc:
-        print(f"[webhook.sender] Error sending webhook: {exc}")
-        return
+        log.info("[webhook] Sending message (%d chars)", len(content))
+        resp = requests.post(url, json=payload, timeout=DEFAULT_TIMEOUT)
 
-    if resp.status_code >= 400:
-        print(f"[webhook.sender] Webhook returned {resp.status_code}: {resp.text}")
+        if resp.status_code >= 400:
+            log.error(
+                "[webhook] HTTP %s from webhook: %s",
+                resp.status_code,
+                resp.text,
+            )
+        else:
+            log.info("[webhook] Message delivered successfully")
+
+    except requests.RequestException:
+        log.exception("[webhook] Request to webhook failed")
+    except Exception:
+        log.exception("[webhook] Unexpected error while sending webhook")

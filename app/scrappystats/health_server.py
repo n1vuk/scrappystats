@@ -1,19 +1,29 @@
-from fastapi import FastAPI
-import uvicorn
+import logging
 from .version import __version__
+from .webhook.sender import post_webhook_message
 
-app = FastAPI()
+log = logging.getLogger("scrappystats.health")
 
-@app.get("/health/live")
-def live():
-    return {"status": "alive", "version": __version__}
+_READY_WEBHOOK_SENT = False
+
 
 @app.get("/health/ready")
 def ready():
-    return {"status": "ready", "version": __version__}
+    global _READY_WEBHOOK_SENT
 
-def main():
-    uvicorn.run(app, host="0.0.0.0", port=8080, reload=False)
+    if not _READY_WEBHOOK_SENT:
+        try:
+            post_webhook_message(
+                f"🟢 ScrappyStats is online and ready (v{__version__})"
+            )
+            _READY_WEBHOOK_SENT = True
+            log.info("Ready webhook sent")
+        except Exception:
+            # sender already logs, but we guard anyway
+            log.exception("Failed to send ready webhook")
 
-if __name__ == "__main__":
-    main()
+    return {
+        "status": "ready",
+        "service": "scrappystats",
+        "version": __version__,
+    }
