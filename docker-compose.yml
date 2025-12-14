@@ -4,8 +4,24 @@ services:
       context: ./current
       dockerfile: Dockerfile
     container_name: scrappystats
-    env_file: 
-      - .env
+    expose:
+      - "8000"
+    networks:
+      - scrappy-net
     volumes:
       - ./config:/config
+      - ./scrappystats/data:/data
+      - ./scrappystats/logs:/logs
+    env_file:
+      - .env
     restart: unless-stopped
+    command: ["/usr/bin/supervisord", "-c", "/app/supervisord.conf"]
+
+volumes:
+  data:
+  logs:
+
+networks:
+  scrappy-net:
+    external: true
+
