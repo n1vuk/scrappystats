@@ -1,2 +1,4 @@
-from .utils import load_alliances, save_json, iso_now
-from .legacy import history_snapshot_path, history_meta_path
+from .report_service import run_service_report
+
+if __name__ == "__main__":
+    run_service_report("daily")
