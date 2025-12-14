@@ -5,7 +5,9 @@ from fastapi.responses import JSONResponse
 from .discord_utils import verify_signature, interaction_response, pong, register_commands
 from .version import __version__
 from .utils import utcnow
-from .commands.reports import handle_report
+#from .commands.reports import handle_report
+from .services.reporting import run_service_report
+from .commands.interactions import handle_fullroster, handle_forcepull
 
 log = logging.getLogger("scrappystats.interactions")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -78,9 +80,9 @@ def dispatch_command(sub_name: str, payload: dict):
 
         # ---- real commands (moved out of this file) ----
         "fullroster": handle_fullroster,
-        "dailyreport": lambda p: handle_report(p, period="daily"),
-        "weeklyreport": lambda p: handle_report(p, period="weekly"),
-        "interimreport": lambda p: handle_report(p, period="interim"),
+        "dailyreport": lambda p: run_service_report(p, period="daily"),
+        "weeklyreport": lambda p: run_service_report(p, period="weekly"),
+        "interimreport": lambda p: run_service_report(p, period="interim"),
 
         "forcepull": handle_forcepull,
     }
