@@ -15,7 +15,7 @@ from ..models.member import Member
 from .slash_fullroster import full_roster_command
 from .slash_service import service_record_command
 from ..discord_utils import interaction_response
-from ..config import load_config
+from ..services.config import load_config
 from ..services.sync import run_alliance_sync
 
 
