@@ -258,7 +258,39 @@ def sync_alliance(alliance_cfg: dict) -> None:
     state["last_sync"] = scrape_timestamp
     save_state(alliance_id, state)
 
+# def run_alliance_sync(alliance: dict) -> None:
+#     """
+#     Canonical orchestration entry point for syncing an alliance.
+#     Used by cron, startup, and forcepull.
+#     """
+#     cfg = build_alliance_cfg(alliance)
+#     run_alliance_sync(alliance)
 
+def run_alliance_sync(alliance: dict) -> None:
+    """
+    Canonical orchestration entry point.
+
+    - Scrapes data
+    - Builds alliance_cfg
+    - Calls sync_alliance()
+
+    Used by cron, startup, and forcepull.
+    """
+    alliance_id = alliance.get("id", "default")
+
+    scraped_members = alliance.get("scraped_members", [])
+    scrape_timestamp = alliance.get("scrape_timestamp") or (
+        datetime.utcnow().isoformat() + "Z"
+    )
+
+    cfg = {
+        "id": alliance_id,
+        "scraped_members": scraped_members,
+        "scrape_timestamp": scrape_timestamp,
+    }
+
+    sync_alliance(cfg)
+    
 def main():
     # Simple test harness; replace with real config/cron wiring.
     cfg = {

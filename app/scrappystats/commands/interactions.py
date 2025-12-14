@@ -5,12 +5,60 @@ These functions are intentionally independent of FastAPI / HTTP details.
 They operate purely on alliance_id / member_name and return formatted text
 using the v2 state layer and slash command formatters.
 """
+import logging
+import threading
+
 from typing import Optional
 
 from ..storage.state import load_state
 from ..models.member import Member
 from .slash_fullroster import full_roster_command
 from .slash_service import service_record_command
+from . .discord_utils import interaction_response
+from . .config import load_config
+from ..services.sync import run_alliance_sync
+
+
+log = logging.getLogger("scrappystats.forcepull")
+
+def _run_forcepull(guild_id: str):
+    try:
+        config = load_config()
+        alliance = config.get("alliances", {}).get(guild_id)
+
+        if not alliance:
+            log.warning("Forcepull: no alliance configured for guild %s", guild_id)
+            return
+
+        log.info("Forcepull started for guild %s", guild_id)
+
+        # This function must be the SAME one cron/startup uses
+        run_alliance_sync(alliance)
+
+        log.info("Forcepull completed for guild %s", guild_id)
+
+    except Exception:
+        log.exception("Forcepull failed for guild %s", guild_id)
+        
+def handle_forcepull(payload: dict):
+    guild_id = payload.get("guild_id")
+
+    if not guild_id:
+        return interaction_response(
+            "❌ Force pull must be run from a server.",
+            ephemeral=True,
+        )
+
+    threading.Thread(
+        target=_run_forcepull,
+        args=(guild_id,),
+        daemon=True,
+    ).start()
+
+    return interaction_response(
+        "🛠 **Force pull started**\nScrappy is fetching and syncing alliance data.",
+        ephemeral=True,
+    )
 
 
 def handle_fullroster(alliance_id: str = "default") -> str:

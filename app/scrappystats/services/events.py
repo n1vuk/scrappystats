@@ -1,81 +1,64 @@
-
-"""Event dispatcher for v2.0.0-dev.
-
-Takes normalized event dicts from the sync pipeline and sends
-Trek-themed messages to the configured webhook.
 """
-from typing import List, Dict, Any
+Event → message → webhook dispatch.
 
-from ..models.member import Member
-from ..webhook.messages import (
-    build_join_message_for_member,
-    build_rejoin_message_for_member,
-    build_leave_message_for_member,
-    build_rename_message_for_member,
-    build_promotion_message_for_member,
-    build_demotion_message_for_member,
-    build_level_up_message_for_member,
-)
+This is the ONLY place that:
+- iterates events
+- builds messages
+- sends webhooks
+"""
+
+import logging
+from typing import Dict, List, Any
+
 from ..webhook.sender import post_webhook_message
+from ..webhook import messages
+
+log = logging.getLogger("scrappystats.events")
 
 
-def dispatch_webhook_events(events: List[Dict[str, Any]], stardate: str) -> None:
-    """Dispatch all events to the webhook as human-readable messages.
+_EVENT_BUILDERS = {
+    "member_joined": messages.build_member_joined,
+    "member_left": messages.build_member_left,
+    "rank_change": messages.build_rank_change,
+}
 
-    Each event dict is expected to contain:
-      - type: one of 'join', 'leave', 'rejoin',
-               'rename', 'promotion', 'demotion', 'level_up'
-      - member: Member
-      - other fields depending on type (old_name, new_name, etc.)
+
+def _build_message(event: Dict[str, Any]) -> str:
+    etype = event.get("type", "unknown")
+    builder = _EVENT_BUILDERS.get(etype, messages.build_generic_event)
+    return builder(event)
+
+
+def dispatch_webhook_events(
+    events: List[Dict[str, Any]],
+    stardate: str,
+) -> None:
     """
-    for ev in events:
-        etype = ev.get("type")
-        member: Member = ev.get("member")  # type: ignore[assignment]
+    Dispatch a batch of events to the webhook.
 
-        if not isinstance(member, Member):
-            continue
+    - Never raises
+    - Logs all failures
+    - Continues processing remaining events
+    """
+    if not events:
+        log.info("No events to dispatch for stardate %s", stardate)
+        return
 
-        if etype == "join":
-            content = build_join_message_for_member(member, stardate)
-        elif etype == "rejoin":
-            last_leave = ev.get("last_leave") or {}
-            previous_rank = last_leave.get("old_rank") or last_leave.get("previous_rank") or member.rank
-            content = build_rejoin_message_for_member(member, previous_rank, stardate)
-        elif etype == "leave":
-            content = build_leave_message_for_member(member, stardate)
-        elif etype == "rename":
-            content = build_rename_message_for_member(
-                member,
-                ev.get("old_name"),
-                ev.get("new_name"),
-                stardate,
-            )
-        elif etype == "promotion":
-            content = build_promotion_message_for_member(
-                member,
-                ev.get("old_rank"),
-                ev.get("new_rank"),
-                stardate,
-            )
-        elif etype == "demotion":
-            content = build_demotion_message_for_member(
-                member,
-                ev.get("old_rank"),
-                ev.get("new_rank"),
-                stardate,
-            )
-        elif etype == "level_up":
-            content = build_level_up_message_for_member(
-                member,
-                ev.get("old_level"),
-                ev.get("new_level"),
-                stardate,
-            )
-        else:
-            # Unknown / unsupported event type
-            continue
+    log.info("Dispatching %d webhook events for stardate %s", len(events), stardate)
 
+    for idx, event in enumerate(events, start=1):
         try:
-            post_webhook_message(content)
-        except Exception as exc:
-            print(f"[dispatch_webhook_events] Failed to send {etype}: {exc}")
+            message = _build_message(event)
+            post_webhook_message(message)
+            log.debug("Dispatched event %d/%d", idx, len(events))
+
+        except Exception:
+            # This should basically never happen now, but if it does:
+            log.exception(
+                "Failed to dispatch event %d/%d: %r",
+                idx,
+                len(events),
+                event,
+            )
+
+    log.info("Webhook dispatch complete (%d events)", len(events))
