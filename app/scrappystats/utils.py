@@ -19,7 +19,7 @@ for d in (STATE_DIR, HISTORY_DIR, ARCHIVE_DIR, EVENTS_DIR, PENDING_RENAMES_DIR):
 ALLIANCES_CONFIG = Path("/app/alliances.json")
 
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
-
+    
 def state_path(alliance_id: str) -> Path:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     return STATE_DIR / f"{alliance_id}.json"
