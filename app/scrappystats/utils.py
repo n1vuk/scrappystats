@@ -4,9 +4,10 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 
-DATA_ROOT = Path(os.environ.get("SCRAPPYSTATS_DATA_ROOT", "/data"))
+DATA_ROOT = Path(os.environ.g1et("SCRAPPYSTATS_DATA_ROOT", "/data"))
 
-STATE_DIR = DATA_ROOT / "state"
+STATE_DIR = Path("/app/data/state")
+SNAPSHOT_DIR = Path("/app/data/snapshots")
 HISTORY_DIR = DATA_ROOT / "history"
 ARCHIVE_DIR = DATA_ROOT / "archive"
 EVENTS_DIR = DATA_ROOT / "events"
@@ -19,11 +20,21 @@ ALLIANCES_CONFIG = Path("/app/alliances.json")
 
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
-def utcnow():
-    return datetime.now(timezone.utc)
+def state_path(alliance_id: str) -> Path:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    return STATE_DIR / f"{alliance_id}.json"
+
+def history_snapshot_path(alliance_id: str, ts: str) -> Path:
+    """
+    Return path to a historical snapshot for an alliance at timestamp ts.
+    ts is expected to be an ISO-like string (e.g. 2025-12-15T00:00)
+    """
+    return HISTORY_DIR / alliance_id / f"{ts}.json"
+
 
 def iso_now():
-    return utcnow().strftime(ISO_FORMAT)
+    return datetime.now(timezone.utc).strftime(ISO_FORMAT)
+
 
 def parse_iso(ts: str) -> datetime:
     return datetime.strptime(ts, ISO_FORMAT).replace(tzinfo=timezone.utc)
@@ -47,18 +58,6 @@ def save_json(path, data):
     tmp.replace(path)
 
 
-# ---- Backward compatibility shims (v2.1.2) ----
-def history_snapshot_path(*args, **kwargs):
-    for name in (
-        'snapshot_path',
-        'get_snapshot_path',
-        'history_snapshot',
-    ):
-        fn = globals().get(name)
-        if callable(fn):
-            return fn(*args, **kwargs)
-    raise ImportError('No snapshot path helper found in utils')
-
 def history_meta_path(*args, **kwargs):
     for name in (
         'meta_path',
@@ -69,3 +68,5 @@ def history_meta_path(*args, **kwargs):
         if callable(fn):
             return fn(*args, **kwargs)
     raise ImportError('No meta path helper found in utils')
+    
+

@@ -6,7 +6,7 @@ from .discord_utils import verify_signature, interaction_response, pong, registe
 from .version import __version__
 from .utils import utcnow
 #from .commands.reports import handle_report
-from .services.slash_service import handle_report_slash
+from .commands.slash_service import handle_report_slash
 from .commands.interactions import handle_fullroster, handle_forcepull
 
 log = logging.getLogger("scrappystats.interactions")

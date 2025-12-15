@@ -1,4 +1,28 @@
-from scrappystats.utils import load_json, state_path,history_snapshot_path
+from scrappystats.utils import load_json, history_snapshot_path, DATA_ROOT, HISTORY_DIR
+
+
+STATE_DIR = DATA_ROOT / "state"
+
+def load_state_and_baseline(alliance_id: str, kind: str):
+    """
+    Load current alliance state and the baseline snapshot used
+    to compute report deltas.
+    """
+    state_path = STATE_DIR / f"{alliance_id}.json"
+    baseline_path = HISTORY_DIR / kind / f"{alliance_id}.json"
+
+    state = load_json(state_path, {})
+    baseline = load_json(baseline_path, {})
+
+    return state, baseline
+
+def load_snapshots(alliance_id: str, start_ts: str, end_ts: str):
+    """
+    Load two historical snapshots for delta computation.
+    """
+    start = load_json(history_snapshot_path(alliance_id, start_ts), {})
+    end = load_json(history_snapshot_path(alliance_id, end_ts), {})
+    return start, end
 
 def compute_deltas(cur: dict, prev: dict):
     deltas = {}
@@ -14,11 +38,6 @@ def compute_deltas(cur: dict, prev: dict):
         }
         deltas[name] = d
     return deltas
-
-def load_state_and_baseline(alliance_id: str, kind: str):
-    state = load_json(state_path(alliance_id), {})
-    baseline = load_json(history_snapshot_path(alliance_id, kind), {})
-    return state, baseline
 
 def make_table(headers, rows):
     """
