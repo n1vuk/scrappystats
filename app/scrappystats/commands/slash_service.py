@@ -4,6 +4,9 @@
 Formats the service history for a single Member.
 """
 from ..models.member import Member
+from typing import Literal
+from .reporting import run_service_report
+from ..log import log  # or wherever log lives
 
 def service_record_command(member: Member) -> str:
     """Return a formatted service record for the given Member instance."""
@@ -50,3 +53,16 @@ def service_record_command(member: Member) -> str:
     return "\n".join(lines)
 
 __all__ = ["service_record_command"]
+
+
+ReportPeriod = Literal["daily", "weekly", "interim"]
+
+
+def handle_report_slash(guild_id: str, period: ReportPeriod):
+    """
+    Thin adapter for slash commands.
+    No business logic lives here.
+    """
+    log.info("Slash report requested: guild=%s period=%s", guild_id, period)
+    return run_service_report(guild_id, period)
+

@@ -6,7 +6,7 @@ from .discord_utils import verify_signature, interaction_response, pong, registe
 from .version import __version__
 from .utils import utcnow
 #from .commands.reports import handle_report
-from .commands.slash_service import handle_report
+from .services.slash_service import handle_report_slash
 from .commands.interactions import handle_fullroster, handle_forcepull
 
 log = logging.getLogger("scrappystats.interactions")
@@ -80,9 +80,9 @@ def dispatch_command(sub_name: str, payload: dict):
 
         # ---- real commands (moved out of this file) ----
         "fullroster": handle_fullroster,
-        "dailyreport": lambda p: run_service_report(p, period="daily"),
-        "weeklyreport": lambda p: run_service_report(p, period="weekly"),
-        "interimreport": lambda p: run_service_report(p, period="interim"),
+        "dailyreport": lambda p: handle_report_slash(p, period="daily"),
+        "weeklyreport": lambda p: handle_report_slash(p, period="weekly"),
+        "interimreport": lambda p: handle_report_slash(p, period="interim"),
 
         "forcepull": handle_forcepull,
     }
