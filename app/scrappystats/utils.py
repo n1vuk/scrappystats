@@ -3,7 +3,6 @@ import json
 from pathlib import Path
 from datetime import datetime, timezone
 
-from .version import __version__
 
 DATA_ROOT = Path(os.environ.get("SCRAPPYSTATS_DATA_ROOT", "/data"))
 
@@ -46,13 +45,6 @@ def save_json(path, data):
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
     tmp.replace(path)
-
-# ---- Backward compatibility shims ----
-def history_snapshot_path(*args, **kwargs):
-    return snapshot_path(*args, **kwargs)
-
-def history_meta_path(*args, **kwargs):
-    return meta_path(*args, **kwargs)
 
 
 # ---- Backward compatibility shims (v2.1.2) ----

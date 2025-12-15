@@ -9,7 +9,7 @@ Created on Sun Dec 14 11:03:43 2025
 from datetime import datetime
 from typing import Literal
 
-from .utils import load_alliances
+from scrappystats.utils import load_alliances
 from .report_common import load_state_and_baseline, compute_deltas
 from .webhook.sender import post_webhook_message
 
