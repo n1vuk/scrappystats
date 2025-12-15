@@ -4,7 +4,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 
-DATA_ROOT = Path(os.environ.g1et("SCRAPPYSTATS_DATA_ROOT", "/data"))
+DATA_ROOT = Path(os.environ.get("SCRAPPYSTATS_DATA_ROOT", "/data"))
 
 STATE_DIR = Path("/app/data/state")
 SNAPSHOT_DIR = Path("/app/data/snapshots")
