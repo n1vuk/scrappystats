@@ -1,5 +1,4 @@
-from scrappystats.utils import load_json
-from .legacy import state_path, history_snapshot_path
+from scrappystats.utils import load_json, state_path,history_snapshot_path
 
 def compute_deltas(cur: dict, prev: dict):
     deltas = {}
