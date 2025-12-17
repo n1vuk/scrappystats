@@ -12,6 +12,17 @@ HISTORY_DIR = DATA_ROOT / "history"
 ARCHIVE_DIR = DATA_ROOT / "archive"
 EVENTS_DIR = DATA_ROOT / "events"
 PENDING_RENAMES_DIR = DATA_ROOT / "pending_renames"
+def archive_path(alliance_id: str) -> str:
+    """
+    Path to archived players for an alliance.
+    """
+    return str(ARCHIVE_DIR / f"alliance_{alliance_id}_archive.json")
+
+
+from datetime import datetime, timezone
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 for d in (STATE_DIR, HISTORY_DIR, ARCHIVE_DIR, EVENTS_DIR, PENDING_RENAMES_DIR):
     d.mkdir(parents=True, exist_ok=True)
