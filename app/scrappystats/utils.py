@@ -3,7 +3,6 @@ import json
 from pathlib import Path
 from datetime import datetime, timezone
 
-
 DATA_ROOT = Path(os.environ.get("SCRAPPYSTATS_DATA_ROOT", "/data"))
 
 STATE_DIR = Path("/app/data/state")
@@ -18,8 +17,8 @@ def archive_path(alliance_id: str) -> str:
     """
     return str(ARCHIVE_DIR / f"alliance_{alliance_id}_archive.json")
 
-
-from datetime import datetime, timezone
+def events_path(alliance_id: str) -> str:
+    return str(EVENTS_DIR / f"alliance_{alliance_id}_events.json")
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -80,4 +79,13 @@ def history_meta_path(*args, **kwargs):
             return fn(*args, **kwargs)
     raise ImportError('No meta path helper found in utils')
     
+
+def append_event(alliance_id: str, event: dict) -> None:
+    """
+    Append a single event to the alliance events file.
+    """
+    path = events_path(alliance_id)
+    events = load_json(path, [])
+    events.append(event)
+    save_json(path, events)
 
