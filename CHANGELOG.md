@@ -137,4 +137,4 @@
 ## v2.1.25 
 - Fix: remove embedded uvicorn startup from interaction_server
 
-
+## through 2.2.0 stabalizing refactor

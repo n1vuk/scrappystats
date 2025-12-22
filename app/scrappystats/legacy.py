@@ -27,12 +27,17 @@ from scrappystats.utils import (
     history_meta_path,
     save_raw_html,
 )
-
+from scrappystats.utils import (
+    STATE_DIR,
+    EVENTS_DIR,
+    ARCHIVE_DIR,
+    HISTORY_DIR,
+)
 # ---- Directory aliases (derived ONLY) ----
-STATE_DIR   = Path(state_path("_probe")).parent
-EVENTS_DIR  = Path(events_path("_probe")).parent
-ARCHIVE_DIR = Path(archive_path("_probe")).parent
-HISTORY_DIR = Path(history_snapshot_path("_probe")).parent
+#STATE_DIR   = Path(state_path("_probe")).parent
+#EVENTS_DIR  = Path(events_path("_probe")).parent
+#ARCHIVE_DIR = Path(archive_path("_probe")).parent
+#HISTORY_DIR = Path(history_snapshot_path("_probe")).parent
 
 # ---- Legacy helper ----
 def _utc_ts() -> str:
