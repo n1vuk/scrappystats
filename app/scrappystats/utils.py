@@ -89,3 +89,17 @@ def append_event(alliance_id: str, event: dict) -> None:
     events.append(event)
     save_json(path, events)
 
+def _utc_ts() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+
+def save_raw_html(alliance_id: str, html: str, stamp: str | None = None) -> str:
+    """
+    Persist raw alliance HTML for debugging / audit.
+    """
+    stamp = stamp or _utc_ts()
+    path = Path(ARCHIVE_DIR) / "raw_html"
+    path.mkdir(parents=True, exist_ok=True)
+
+    file = path / f"alliance_{alliance_id}_{stamp}.html"
+    file.write_text(html or "", encoding="utf-8")
+    return str(file)
