@@ -8,12 +8,17 @@ from .utils import utcnow
 #from .commands.reports import handle_report
 from .commands.slash_service import handle_report_slash
 from .commands.interactions import handle_fullroster, handle_forcepull
+from scrappystats.config_loader import load_alliances
 
 log = logging.getLogger("scrappystats.interactions")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 app = FastAPI()
 START_TIME = utcnow()
+
+## Check for valid config file and fail if one is not found
+load_alliances()
+
 
 SCRAPPYSTATS_DESCRIPTION = (
     "ScrappyStats helps you command your STFC alliance with fast reports and roster insights."

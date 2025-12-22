@@ -56,8 +56,12 @@ def load_json(path, default):
     except (FileNotFoundError, json.JSONDecodeError):
         return default
 
-def load_alliances():
-    return load_json(ALLIANCES_CONFIG, {})
+## def load_alliances():
+##     return load_json(ALLIANCES_CONFIG, {})
+# LEGACY – do not use
+# This loader was replaced by scrappystats.config_loader.load_alliances
+# This is a temp. fix to be removed in future once we're sure its not used
+from scrappystats.config_loader import load_alliances
 
 def save_json(path, data):
     path = Path(path)
