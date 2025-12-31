@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 from datetime import datetime, timezone
 
+from .config import load_config
+
 DATA_ROOT = Path(os.environ.get("SCRAPPYSTATS_DATA_ROOT", "/data"))
 
 STATE_DIR = Path("/app/data/state")
@@ -25,8 +27,6 @@ def utcnow() -> datetime:
 
 for d in (STATE_DIR, HISTORY_DIR, ARCHIVE_DIR, EVENTS_DIR, PENDING_RENAMES_DIR):
     d.mkdir(parents=True, exist_ok=True)
-
-ALLIANCES_CONFIG = Path("/app/alliances.json")
 
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
     
@@ -57,7 +57,7 @@ def load_json(path, default):
         return default
 
 def load_alliances():
-    return load_json(ALLIANCES_CONFIG, {})
+    return load_config()
 
 def save_json(path, data):
     path = Path(path)

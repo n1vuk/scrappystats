@@ -3,6 +3,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 
 from .discord_utils import verify_signature, interaction_response, pong, register_commands
+from .log import configure_logging
 from .version import __version__
 from .utils import utcnow
 #from .commands.reports import handle_report
@@ -10,7 +11,7 @@ from .commands.slash_service import handle_report_slash
 from .commands.interactions import handle_fullroster, handle_forcepull
 
 log = logging.getLogger("scrappystats.interactions")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+configure_logging()
 
 app = FastAPI()
 START_TIME = utcnow()
@@ -27,6 +28,7 @@ COMMANDS = [
         "options": [
             {"type": 1, "name": "dailyreport", "description": "Show the daily alliance report."},
             {"type": 1, "name": "weeklyreport", "description": "Show the weekly alliance report."},
+            {"type": 1, "name": "interimreport", "description": "Show the interim alliance report."},
             {"type": 1, "name": "forcepull", "description": "Force Scrappy to fetch new data."},
             {"type": 1, "name": "fullroster", "description": "Show full roster with join dates."},
             {"type": 1, "name": "help", "description": "Show help for all ScrappyStats commands."},

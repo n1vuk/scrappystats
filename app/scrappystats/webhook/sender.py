@@ -6,13 +6,18 @@ from typing import Optional
 log = logging.getLogger("scrappystats.webhook")
 
 DEFAULT_TIMEOUT = 10
+_WEBHOOK_ENV_VARS = ("DISCORD_WEBHOOK_URL",)
 
 
 def _get_webhook_url() -> Optional[str]:
     """
     Returns the configured webhook URL or None if not set.
     """
-    return os.getenv("SCRAPPYSTATS_WEBHOOK_URL")
+    for name in _WEBHOOK_ENV_VARS:
+        url = os.getenv(name)
+        if url:
+            return url
+    return None
 
 
 def post_webhook_message(content: str) -> None:

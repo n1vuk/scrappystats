@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 
 DEFAULT_CONFIG_PATH = os.getenv(
     "SCRAPPYSTATS_CONFIG",
-    "/app/config/config.json",
+    "/data/alliances.config",
 )
 
 def load_config() -> dict:

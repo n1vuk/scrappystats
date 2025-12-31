@@ -5,8 +5,9 @@ Formats the service history for a single Member.
 """
 from ..models.member import Member
 from typing import Literal
-from .reporting import run_service_report
+from ..services.report_service import run_service_report
 from ..log import log  # or wherever log lives
+from ..discord_utils import interaction_response
 
 def service_record_command(member: Member) -> str:
     """Return a formatted service record for the given Member instance."""
@@ -58,11 +59,15 @@ __all__ = ["service_record_command"]
 ReportPeriod = Literal["daily", "weekly", "interim"]
 
 
-def handle_report_slash(guild_id: str, period: ReportPeriod):
+def handle_report_slash(payload: dict, period: ReportPeriod):
     """
     Thin adapter for slash commands.
     No business logic lives here.
     """
+    guild_id = payload.get("guild_id")
     log.info("Slash report requested: guild=%s period=%s", guild_id, period)
-    return run_service_report(guild_id, period)
-
+    run_service_report(period)
+    return interaction_response(
+        f"📊 {period.capitalize()} report dispatched. Check the configured webhook.",
+        ephemeral=True,
+    )

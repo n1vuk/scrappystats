@@ -1,6 +1,3 @@
-# Placeholder for Member Identity Model
-# Move to scrappystats/models/member.py after refactor
-
 class Member:
     def __init__(self, uuid, name, level, rank, original_join_date, last_join_date):
         self.uuid = uuid
