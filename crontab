@@ -1,6 +1,6 @@
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-0 */4 * * * cd /app && python3 -m scrappystats.fetch_and_process >> /var/log/cron.log 2>&1
+0 */4 * * * cd /app && python3 -m scrappystats.fetch_and_sync >> /var/log/cron.log 2>&1
 0 9 * * * cd /app && python3 -m scrappystats.report_daily >> /var/log/cron.log 2>&1
 0 12 * * 0 cd /app && python3 -m scrappystats.report_weekly >> /var/log/cron.log 2>&1

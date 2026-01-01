@@ -74,15 +74,12 @@ def handle_forcepull(payload: dict):
     )
 
 
-def handle_fullroster(alliance_id: str = "default") -> str:
-    """Return a formatted full roster string for the given alliance_id.
-
-    This is a thin wrapper that:
-      * loads v2 state via storage.state.load_state
-      * passes it into slash_fullroster.full_roster_command
-    """
-    state = load_state(alliance_id)
-    return full_roster_command(state)
+def handle_fullroster(payload: dict) -> dict:
+    """Return a formatted full roster response for the given guild."""
+    guild_id = payload.get("guild_id") or "default"
+    state = load_state(guild_id)
+    message = full_roster_command(state)
+    return interaction_response(message, ephemeral=True)
 
 
 def _find_member_by_name(state: dict, name: str) -> Optional[Member]:

@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 from datetime import datetime, timezone
 
+from .config import load_config
+
 DATA_ROOT = Path(os.environ.get("SCRAPPYSTATS_DATA_ROOT", "/data"))
 
 STATE_DIR = Path("/app/data/state")
@@ -25,8 +27,6 @@ def utcnow() -> datetime:
 
 for d in (STATE_DIR, HISTORY_DIR, ARCHIVE_DIR, EVENTS_DIR, PENDING_RENAMES_DIR):
     d.mkdir(parents=True, exist_ok=True)
-
-ALLIANCES_CONFIG = Path("/app/alliances.json")
 
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
     
@@ -56,12 +56,8 @@ def load_json(path, default):
     except (FileNotFoundError, json.JSONDecodeError):
         return default
 
-## def load_alliances():
-##     return load_json(ALLIANCES_CONFIG, {})
-# LEGACY – do not use
-# This loader was replaced by scrappystats.config_loader.load_alliances
-# This is a temp. fix to be removed in future once we're sure its not used
-from scrappystats.config_loader import load_alliances
+def load_alliances():
+    return load_config()
 
 def save_json(path, data):
     path = Path(path)

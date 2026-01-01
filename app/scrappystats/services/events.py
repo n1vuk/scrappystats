@@ -17,6 +17,13 @@ log = logging.getLogger("scrappystats.events")
 
 
 _EVENT_BUILDERS = {
+    "join": messages.build_join,
+    "rejoin": messages.build_rejoin,
+    "leave": messages.build_leave,
+    "rename": messages.build_rename,
+    "promotion": messages.build_promotion,
+    "demotion": messages.build_demotion,
+    "level_up": messages.build_level_up,
     "member_joined": messages.build_member_joined,
     "member_left": messages.build_member_left,
     "rank_change": messages.build_rank_change,

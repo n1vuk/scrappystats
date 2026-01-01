@@ -307,19 +307,3 @@ def main():
 def run_all():
     return main()
 
-
-# ---- Backward compatibility shim (v2.1.2) ----
-def fetch_alliance_page(*args, **kwargs):
-    """
-    Compatibility wrapper for legacy callers.
-    """
-    from . import sync as _sync
-    for name in (
-        'fetch_alliance_data',
-        'fetch_alliance',
-        'fetch_alliance_sync',
-    ):
-        fn = getattr(_sync, name, None)
-        if callable(fn):
-            return fn(*args, **kwargs)
-    raise ImportError('No fetch_alliance implementation found in services.sync')

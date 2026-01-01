@@ -2,8 +2,9 @@ import logging
 import subprocess
 from scrappystats.config_loader import load_alliances
 
+from .log import configure_logging
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+configure_logging()
 
 def main():
     logging.info("=== ScrappyStats startup init ===")

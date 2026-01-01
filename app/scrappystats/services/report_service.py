@@ -13,7 +13,7 @@ from typing import Literal
 from scrappystats.config_loader import load_alliances
 
 from .report_common import load_state_and_baseline, compute_deltas
-from .webhook.sender import post_webhook_message
+from ..webhook.sender import post_webhook_message
 
 ReportType = Literal["interim", "daily", "weekly"]
 
@@ -33,9 +33,9 @@ def run_service_report(report_type: ReportType) -> None:
       - daily    (yesterday)
       - weekly   (last 7 days)
     """
-    alliances = load_alliances()
+    cfg = load_alliances()
 
-    for alliance in alliances:
+    for alliance in cfg.get("alliances", []):
         alliance_id = alliance["id"]
         alliance_name = alliance.get("name", alliance_id)
 
