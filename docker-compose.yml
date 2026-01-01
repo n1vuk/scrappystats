@@ -9,7 +9,7 @@ services:
     networks:
       - scrappy-net
     volumes:
-      - ./config:/config
+      - .app/config:/app/config:ro
       - ./scrappystats/data:/data
       - ./scrappystats/logs:/logs
     env_file:

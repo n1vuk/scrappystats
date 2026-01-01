@@ -15,7 +15,11 @@ from ..models.member import Member
 from .slash_fullroster import full_roster_command
 from .slash_service import service_record_command
 from ..discord_utils import interaction_response
-from ..config import load_config
+# refactor allience load to new function
+# from ..config import load_config
+from scrappystats.config_loader import load_alliances
+#config = load_alliances()
+
 from ..services.sync import run_alliance_sync
 
 
@@ -23,13 +27,22 @@ log = logging.getLogger("scrappystats.forcepull")
 
 def _run_forcepull(guild_id: str):
     try:
-        config = load_config()
-        alliance = config.get("alliances", {}).get(guild_id)
+        # #config = load_config()
+        # config = load_alliances()
+        # alliance = config.get("alliances", {}).get(guild_id)
 
+        # if not alliance:
+        #     log.warning("Forcepull: no alliance configured for guild %s", guild_id)
+        #     return
+        alliances = load_alliances()
+
+        alliance = next(
+            (a for a in alliances if a.get("id") == str(guild_id)),
+            None
+            )   
         if not alliance:
-            log.warning("Forcepull: no alliance configured for guild %s", guild_id)
-            return
-
+            log.error(f"Forcepull failed for guild {guild_id}")
+   
         log.info("Forcepull started for guild %s", guild_id)
 
         # This function must be the SAME one cron/startup uses
