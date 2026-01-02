@@ -6,20 +6,20 @@ Created on Sun Dec 14 13:49:31 2025
 @author: chris
 """
 
-# import json
-# import os
-# import logging
+import json
+import logging
+import os
 
-# log = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 DEFAULT_CONFIG_PATH = os.getenv(
     "SCRAPPYSTATS_CONFIG",
     "/data/alliances.config",
 )
 
-# def load_config() -> dict:
-#     """
-#     Load the ScrappyStats configuration from disk.
+def load_config() -> dict:
+    """
+    Load the ScrappyStats configuration from disk.
 
     This is the single source of truth for config loading.
     """
