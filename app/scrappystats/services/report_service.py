@@ -51,7 +51,7 @@ def run_service_report(report_type: ReportType) -> None:
             deltas=deltas,
         )
 
-        post_webhook_message(message)
+        post_webhook_message(message, alliance_id=alliance_id)
 
 def format_service_report(
     *,

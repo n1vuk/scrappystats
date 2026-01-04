@@ -245,7 +245,11 @@ def sync_alliance(alliance_cfg: dict) -> None:
 
     # Dispatch webhook messages for all events.
     try:
-        dispatch_webhook_events(event_batch, scrape_timestamp)
+        dispatch_webhook_events(
+            event_batch,
+            scrape_timestamp,
+            alliance_id=alliance_id,
+        )
     except Exception as exc:
         # Log but do not fail the sync.
         print(f"[sync_alliance] webhook dispatch failed: {exc}")
@@ -306,4 +310,3 @@ def main():
 
 def run_all():
     return main()
-

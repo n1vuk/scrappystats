@@ -1,7 +1,10 @@
 import logging
 import os
-import requests
 from typing import Optional
+
+import requests
+
+from ..config import load_config
 
 log = logging.getLogger("scrappystats.webhook")
 
@@ -9,7 +12,7 @@ DEFAULT_TIMEOUT = 10
 _WEBHOOK_ENV_VARS = ("DISCORD_WEBHOOK_URL",)
 
 
-def _get_webhook_url() -> Optional[str]:
+def _get_webhook_url(*, alliance_id: Optional[str] = None) -> Optional[str]:
     """
     Returns the configured webhook URL or None if not set.
     """
@@ -17,17 +20,24 @@ def _get_webhook_url() -> Optional[str]:
         url = os.getenv(name)
         if url:
             return url
-    return None
+    cfg = load_config()
+    if alliance_id:
+        for alliance in cfg.get("alliances", []):
+            if str(alliance.get("id")) == str(alliance_id):
+                url = alliance.get("webhook")
+                if url:
+                    return url
+    return cfg.get("admin_webhook") or cfg.get("webhook")
 
 
-def post_webhook_message(content: str) -> None:
+def post_webhook_message(content: str, *, alliance_id: Optional[str] = None) -> None:
     """
     Post a plain-text message to the configured webhook.
 
     This is the ONLY supported webhook send path.
     All callers must use this function.
     """
-    url = _get_webhook_url()
+    url = _get_webhook_url(alliance_id=alliance_id)
 
     if not url:
         log.warning("[webhook] No webhook URL configured; skipping message")

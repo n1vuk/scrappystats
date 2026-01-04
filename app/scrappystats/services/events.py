@@ -39,6 +39,8 @@ def _build_message(event: Dict[str, Any]) -> str:
 def dispatch_webhook_events(
     events: List[Dict[str, Any]],
     stardate: str,
+    *,
+    alliance_id: str | None = None,
 ) -> None:
     """
     Dispatch a batch of events to the webhook.
@@ -56,7 +58,7 @@ def dispatch_webhook_events(
     for idx, event in enumerate(events, start=1):
         try:
             message = _build_message(event)
-            post_webhook_message(message)
+            post_webhook_message(message, alliance_id=alliance_id)
             log.debug("Dispatched event %d/%d", idx, len(events))
 
         except Exception:
