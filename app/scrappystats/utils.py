@@ -103,3 +103,16 @@ def save_raw_html(alliance_id: str, html: str, stamp: str | None = None) -> str:
     file = path / f"alliance_{alliance_id}_{stamp}.html"
     file.write_text(html or "", encoding="utf-8")
     return str(file)
+
+
+def save_raw_json(alliance_id: str, data: dict, stamp: str | None = None) -> str:
+    """
+    Persist raw alliance JSON for debugging / audit.
+    """
+    stamp = stamp or _utc_ts()
+    path = Path(ARCHIVE_DIR) / "raw_json"
+    path.mkdir(parents=True, exist_ok=True)
+
+    file = path / f"alliance_{alliance_id}_{stamp}.json"
+    file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    return str(file)

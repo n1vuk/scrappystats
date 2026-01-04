@@ -7,6 +7,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from scrappystats.log import configure_logging
+from scrappystats.utils import save_raw_html
 
 configure_logging()
 
@@ -89,8 +90,14 @@ def parse_roster(html: str) -> Dict[str, dict]:
     return roster
 
 
-def fetch_alliance_roster(alliance_id: str) -> List[dict]:
+def fetch_alliance_roster(alliance_id: str, debug: bool = False) -> List[dict]:
     html = fetch_alliance_page(alliance_id)
+    if debug:
+        try:
+            path = save_raw_html(alliance_id, html)
+            log.info("Saved raw HTML to %s", path)
+        except Exception:
+            log.exception("Failed to save raw HTML for alliance %s", alliance_id)
     roster = parse_roster(html)
     return list(roster.values())
 

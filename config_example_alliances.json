@@ -1,6 +1,7 @@
 {
   "admin_webhook": "https://discord.com/api/webhooks/ADMIN_WEBHOOK_HERE",
   "admins": ["123456789012345678"],
+  "debug": false,
   "alliances": [
     {
       "id": "324544715",
