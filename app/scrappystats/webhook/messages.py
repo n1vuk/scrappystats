@@ -124,10 +124,10 @@ def _header_line(header: str, lines: Iterable[str]) -> str:
 
 def build_join_batch(events: list[Dict[str, Any]]) -> str:
     if not events:
-        raise ValueError("join batch requires at least one event")
-    alliance = _safe(events[0], "alliance_name", "")
-    if not alliance:
-        raise ValueError("join batch requires alliance_name")
+        return (
+            "🖖 **Counselor Troi to Bridge** New Commanders have beamed aboard **Unknown**."
+        )
+    alliance = _safe(events[0], "alliance_name")
     names = [
         _member_name(_get_member(event), event)
         for event in events
