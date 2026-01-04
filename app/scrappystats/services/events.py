@@ -8,12 +8,15 @@ This is the ONLY place that:
 """
 
 import logging
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Iterable
 
 from ..webhook.sender import post_webhook_message
 from ..webhook import messages
 
 log = logging.getLogger("scrappystats.events")
+
+DISCORD_MESSAGE_LIMIT = 2000
+MESSAGE_SEPARATOR = "\n\n"
 
 
 _EVENT_BUILDERS = {
@@ -36,6 +39,46 @@ def _build_message(event: Dict[str, Any]) -> str:
     return builder(event)
 
 
+def _iter_message_batches(
+    events: List[Dict[str, Any]],
+    *,
+    limit: int = DISCORD_MESSAGE_LIMIT,
+    separator: str = MESSAGE_SEPARATOR,
+) -> Iterable[str]:
+    current: list[str] = []
+    current_len = 0
+
+    for event in events:
+        message = _build_message(event)
+        message_len = len(message)
+
+        if message_len > limit:
+            if current:
+                yield separator.join(current)
+                current = []
+                current_len = 0
+            for offset in range(0, message_len, limit):
+                yield message[offset : offset + limit]
+            continue
+
+        if current:
+            projected = current_len + len(separator) + message_len
+        else:
+            projected = message_len
+
+        if projected > limit and current:
+            yield separator.join(current)
+            current = [message]
+            current_len = message_len
+            continue
+
+        current.append(message)
+        current_len = projected
+
+    if current:
+        yield separator.join(current)
+
+
 def dispatch_webhook_events(
     events: List[Dict[str, Any]],
     stardate: str,
@@ -55,19 +98,16 @@ def dispatch_webhook_events(
 
     log.info("Dispatching %d webhook events for stardate %s", len(events), stardate)
 
-    for idx, event in enumerate(events, start=1):
+    for idx, message in enumerate(_iter_message_batches(events), start=1):
         try:
-            message = _build_message(event)
             post_webhook_message(message, alliance_id=alliance_id)
-            log.debug("Dispatched event %d/%d", idx, len(events))
+            log.debug("Dispatched webhook batch %d", idx)
 
         except Exception:
             # This should basically never happen now, but if it does:
             log.exception(
-                "Failed to dispatch event %d/%d: %r",
+                "Failed to dispatch webhook batch %d",
                 idx,
-                len(events),
-                event,
             )
 
     log.info("Webhook dispatch complete (%d events)", len(events))
