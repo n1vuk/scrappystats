@@ -9,7 +9,7 @@ services:
     networks:
       - scrappy-net
     volumes:
-      - .app/config:/app/config:ro
+      - ./app/config:/app/config:ro
       - ./scrappystats/data:/data
       - ./scrappystats/logs:/logs
     env_file:
@@ -24,4 +24,3 @@ volumes:
 networks:
   scrappy-net:
     external: true
-
