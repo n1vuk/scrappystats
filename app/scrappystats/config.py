@@ -18,10 +18,6 @@ FALLBACK_CONFIG_PATHS = (
     "/app/config/alliances.json",
 )
 
-<<<<<<< ours
-def load_config() -> dict:
-=======
-
 def _resolve_config_path() -> str | None:
     if DEFAULT_CONFIG_PATH:
         return DEFAULT_CONFIG_PATH
@@ -32,7 +28,6 @@ def _resolve_config_path() -> str | None:
 
 
 def load_config(*, fatal: bool = False) -> dict:
->>>>>>> theirs
     """
     Load the ScrappyStats configuration from disk.
 
