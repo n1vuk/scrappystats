@@ -1,11 +1,10 @@
 
 import os
 
+DATA_ROOT = os.environ.get("SCRAPPYSTATS_DATA_ROOT", "/data")
+
 def data_dir():
-    root = os.path.dirname(os.path.abspath(__file__))
-    # parent of storage module is scrappystats/storage
-    # data directory is scrappystats/data
-    return os.path.join(os.path.dirname(root), "data")
+    return DATA_ROOT
 
 def ensure_data_dir():
     d = data_dir()
