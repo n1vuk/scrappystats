@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from datetime import datetime, timezone
 
-from .config import load_config
+from .config import load_config, list_alliances
 
 DATA_ROOT = Path(os.environ.get("SCRAPPYSTATS_DATA_ROOT", "/data"))
 
@@ -57,7 +57,11 @@ def load_json(path, default):
         return default
 
 def load_alliances():
-    return load_config()
+    config = load_config()
+    return {
+        **config,
+        "alliances": list_alliances(config),
+    }
 
 def save_json(path, data):
     path = Path(path)

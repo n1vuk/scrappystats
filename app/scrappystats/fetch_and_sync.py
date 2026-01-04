@@ -1,7 +1,7 @@
 """Fetch alliance data and run sync pipeline (v2)."""
 import logging
 
-from .config import load_config
+from .config import load_config, list_alliances
 from .log import configure_logging
 from .services.fetch import fetch_alliance_roster, scrape_timestamp
 from .services.sync import run_alliance_sync
@@ -14,7 +14,7 @@ log = logging.getLogger("scrappystats.fetch_sync")
 
 def main() -> int:
     cfg = load_config()
-    alliances = cfg.get("alliances", [])
+    alliances = list_alliances(cfg)
     debug = bool(cfg.get("debug"))
     if not alliances:
         log.warning("No alliances configured; skipping fetch/sync.")

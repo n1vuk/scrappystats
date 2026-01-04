@@ -4,7 +4,7 @@ from typing import Optional
 
 import requests
 
-from ..config import load_config
+from ..config import load_config, iter_alliances
 
 log = logging.getLogger("scrappystats.webhook")
 
@@ -22,7 +22,7 @@ def _get_webhook_url(*, alliance_id: Optional[str] = None) -> Optional[str]:
             return url
     cfg = load_config()
     if alliance_id:
-        for alliance in cfg.get("alliances", []):
+        for alliance in iter_alliances(cfg):
             if str(alliance.get("id")) == str(alliance_id):
                 url = alliance.get("webhook")
                 if url:

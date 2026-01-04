@@ -17,13 +17,26 @@ from .slash_service import service_record_command
 from ..discord_utils import interaction_response
 # refactor allience load to new function
 # from ..config import load_config
-from scrappystats.config import load_config
+from scrappystats.config import load_config, get_guild_alliances
 #config = load_alliances()
 
 from ..services.sync import run_alliance_sync
 
 
 log = logging.getLogger("scrappystats.forcepull")
+
+def _resolve_alliance(guild_id: str) -> Optional[dict]:
+    config = load_config()
+    alliances = get_guild_alliances(config, guild_id)
+
+    if len(alliances) == 1:
+        log.warning(
+            "Defaulting to the only configured alliance for guild %s",
+            guild_id,
+        )
+        return alliances[0]
+
+    return None
 
 def _run_forcepull(guild_id: str):
     try:
@@ -34,15 +47,11 @@ def _run_forcepull(guild_id: str):
         # if not alliance:
         #     log.warning("Forcepull: no alliance configured for guild %s", guild_id)
         #     return
-        alliances = load_config().get("alliances", [])
-
-        alliance = next(
-            (a for a in alliances if a.get("id") == str(guild_id)),
-            None
-            )   
+        alliance = _resolve_alliance(guild_id)
         if not alliance:
-            log.error(f"Forcepull failed for guild {guild_id}")
-   
+            log.error("Forcepull failed for guild %s: no alliance configured", guild_id)
+            return
+
         log.info("Forcepull started for guild %s", guild_id)
 
         # This function must be the SAME one cron/startup uses
@@ -77,7 +86,13 @@ def handle_forcepull(payload: dict):
 def handle_fullroster(payload: dict) -> dict:
     """Return a formatted full roster response for the given guild."""
     guild_id = payload.get("guild_id") or "default"
-    state = load_state(guild_id)
+    alliance = _resolve_alliance(guild_id)
+    if not alliance:
+        return interaction_response(
+            "❌ Full roster failed: no alliance configured for this server.",
+            ephemeral=True,
+        )
+    state = load_state(alliance.get("id", guild_id))
     message = full_roster_command(state)
     return interaction_response(message, ephemeral=True)
 

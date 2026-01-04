@@ -52,3 +52,33 @@ def load_config(*, fatal: bool = False) -> dict:
         if fatal:
             raise SystemExit(1)
         return {}
+
+
+def iter_alliances(config: dict):
+    guilds = config.get("guilds") or []
+    if guilds:
+        for guild in guilds:
+            for alliance in guild.get("alliances", []) or []:
+                yield alliance
+        return
+
+    for alliance in config.get("alliances", []) or []:
+        yield alliance
+
+
+def list_alliances(config: dict) -> list:
+    return list(iter_alliances(config))
+
+
+def get_guild_alliances(config: dict, guild_id: str) -> list:
+    guilds = config.get("guilds") or []
+    if not guilds:
+        return config.get("alliances", []) or []
+
+    guild = next(
+        (g for g in guilds if str(g.get("id")) == str(guild_id)),
+        None,
+    )
+    if not guild:
+        return []
+    return guild.get("alliances", []) or []
