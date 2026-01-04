@@ -38,14 +38,25 @@ def full_roster_command(alliance_state: dict) -> str:
 
     members.sort(key=sort_key)
 
+    def format_join_date(value: str) -> str:
+        if not value:
+            return "-"
+        if "T" in value:
+            return value.split("T", 1)[0]
+        return value
+
     lines = []
     lines.append("📋 Full Roster")
     lines.append("```")
-    lines.append(f"{'Rank':<10} {'Lvl':>3}  Name")
-    lines.append("-" * 32)
+    lines.append(f"{'Rank':<10} {'Lvl':>3}  {'Last Join':<10} {'Orig Join':<10} Name")
+    lines.append("-" * 58)
     for m in members:
         lvl = m.level if isinstance(m.level, int) else int(m.level or 0)
-        lines.append(f"{m.rank:<10} {lvl:>3}  {m.name}")
+        last_join = format_join_date(m.last_join_date)
+        orig_join = format_join_date(m.original_join_date)
+        lines.append(
+            f"{m.rank:<10} {lvl:>3}  {last_join:<10} {orig_join:<10} {m.name}"
+        )
     lines.append("```")
     return "\n".join(lines)
 

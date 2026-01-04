@@ -28,8 +28,8 @@ class Member:
             data["name"],
             data["level"],
             data["rank"],
-            data["original_join_date"],
-            data["last_join_date"],
+            data.get("original_join_date"),
+            data.get("last_join_date"),
         )
         m.previous_names = data.get("previous_names", [])
         m.service_events = data.get("events", [])
