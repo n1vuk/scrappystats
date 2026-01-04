@@ -9,8 +9,7 @@ Created on Sun Dec 14 11:03:43 2025
 from datetime import datetime
 from typing import Literal
 
-#from scrappystats.utils import load_alliances
-from scrappystats.config_loader import load_alliances
+from scrappystats.config import load_config
 
 from .report_common import load_state_and_baseline, compute_deltas
 from ..webhook.sender import post_webhook_message
@@ -33,9 +32,10 @@ def run_service_report(report_type: ReportType) -> None:
       - daily    (yesterday)
       - weekly   (last 7 days)
     """
-    cfg = load_alliances()
+    cfg = load_config()
+    alliances = cfg.get("alliances", [])
 
-    for alliance in cfg.get("alliances", []):
+    for alliance in alliances:
         alliance_id = alliance["id"]
         alliance_name = alliance.get("name", alliance_id)
 

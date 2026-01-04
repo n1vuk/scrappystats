@@ -17,7 +17,7 @@ from .slash_service import service_record_command
 from ..discord_utils import interaction_response
 # refactor allience load to new function
 # from ..config import load_config
-from scrappystats.config_loader import load_alliances
+from scrappystats.config import load_config
 #config = load_alliances()
 
 from ..services.sync import run_alliance_sync
@@ -34,7 +34,7 @@ def _run_forcepull(guild_id: str):
         # if not alliance:
         #     log.warning("Forcepull: no alliance configured for guild %s", guild_id)
         #     return
-        alliances = load_alliances()
+        alliances = load_config().get("alliances", [])
 
         alliance = next(
             (a for a in alliances if a.get("id") == str(guild_id)),
