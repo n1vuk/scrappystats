@@ -7,6 +7,7 @@ using the v2 state layer and slash command formatters.
 """
 import logging
 import threading
+import time
 
 from typing import Optional
 
@@ -25,6 +26,22 @@ from ..services.sync import run_alliance_sync
 
 
 log = logging.getLogger("scrappystats.forcepull")
+
+def _send_followups_async(
+    app_id: Optional[str],
+    token: Optional[str],
+    messages: list[str],
+    ephemeral: bool = True,
+) -> None:
+    if not messages:
+        return
+
+    def _send():
+        time.sleep(0.25)
+        for message in messages:
+            send_followup_message(app_id, token, message, ephemeral=ephemeral)
+
+    threading.Thread(target=_send, daemon=True).start()
 
 def _resolve_alliance(config: dict, guild_id: str) -> Optional[dict]:
     alliances = get_guild_alliances(config, guild_id)
@@ -106,8 +123,7 @@ def handle_fullroster(payload: dict) -> dict:
     if len(messages) > 1:
         app_id = payload.get("application_id")
         token = payload.get("token")
-        for followup in messages[1:]:
-            send_followup_message(app_id, token, followup, ephemeral=True)
+        _send_followups_async(app_id, token, messages[1:], ephemeral=True)
     return interaction_response(primary, ephemeral=True)
 
 
@@ -257,7 +273,6 @@ def handle_name_changes_slash(payload: dict) -> dict:
     if len(chunks) > 1:
         app_id = payload.get("application_id")
         token = payload.get("token")
-        for followup in chunks[1:]:
-            send_followup_message(app_id, token, followup, ephemeral=True)
+        _send_followups_async(app_id, token, chunks[1:], ephemeral=True)
 
     return interaction_response(primary, ephemeral=True)
