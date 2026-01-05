@@ -2,8 +2,11 @@
 import json
 import os
 import uuid
+from typing import Optional
+
 from .files import ensure_data_dir, state_path
 from ..models.member import Member
+from ..utils import iso_now
 
 def load_state(alliance_id: str) -> dict:
     """Load JSON state for the given alliance_id.
@@ -12,6 +15,7 @@ def load_state(alliance_id: str) -> dict:
       - alliance_id
       - last_sync
       - members: {uuid: member_json}
+      - pull_history: list[dict]
     """
     path = state_path(alliance_id)
     if not os.path.exists(path):
@@ -19,6 +23,7 @@ def load_state(alliance_id: str) -> dict:
             "alliance_id": alliance_id,
             "last_sync": None,
             "members": {},
+            "pull_history": [],
         }
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -29,6 +34,26 @@ def save_state(alliance_id: str, state: dict) -> None:
     path = state_path(alliance_id)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2, sort_keys=True)
+
+
+def record_pull_history(
+    alliance_id: str,
+    timestamp: Optional[str],
+    success: bool,
+    source: Optional[str] = None,
+) -> None:
+    """Record a pull attempt for the given alliance."""
+    state = load_state(alliance_id)
+    history = state.get("pull_history") or []
+    entry = {
+        "timestamp": timestamp or iso_now(),
+        "success": bool(success),
+    }
+    if source:
+        entry["source"] = source
+    history.append(entry)
+    state["pull_history"] = history[-20:]
+    save_state(alliance_id, state)
 
 def initialize_member(scraped: dict, scrape_timestamp: str) -> dict:
     """Create an initial serialized Member for a newly-seen player.

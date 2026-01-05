@@ -13,6 +13,7 @@ from .commands.interactions import (
     handle_forcepull,
     handle_service_record_slash,
     handle_name_changes_slash,
+    handle_pull_history_slash,
 )
 from scrappystats.config import load_config
 
@@ -40,6 +41,7 @@ COMMANDS = [
             {"type": 1, "name": "weeklyreport", "description": "Show the weekly alliance report."},
             {"type": 1, "name": "interimreport", "description": "Show the interim alliance report."},
             {"type": 1, "name": "forcepull", "description": "Force Scrappy to fetch new data."},
+            {"type": 1, "name": "pullhistory", "description": "Show the last 5 data pulls."},
             {"type": 1, "name": "fullroster", "description": "Show full roster with join dates."},
             {
                 "type": 1,
@@ -123,6 +125,7 @@ def dispatch_command(sub_name: str, payload: dict):
         "interimreport": lambda p: handle_report_slash(p, period="interim"),
         "servicerecord": handle_service_record_slash,
         "namechanges": handle_name_changes_slash,
+        "pullhistory": handle_pull_history_slash,
 
         "forcepull": handle_forcepull,
     }

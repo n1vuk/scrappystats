@@ -11,7 +11,7 @@ import time
 
 from typing import Optional
 
-from ..storage.state import load_state
+from ..storage.state import load_state, record_pull_history
 from ..models.member import Member
 from .slash_fullroster import full_roster_messages
 from .slash_service import service_record_command
@@ -56,6 +56,8 @@ def _resolve_alliance(config: dict, guild_id: str) -> Optional[dict]:
     return None
 
 def _run_forcepull(guild_id: str):
+    alliance_id = None
+    pull_timestamp = None
     try:
         config = load_config()
         alliance = _resolve_alliance(config, guild_id)
@@ -71,21 +73,30 @@ def _run_forcepull(guild_id: str):
         log.info("Forcepull started for guild %s", guild_id)
 
         debug = bool(config.get("debug"))
+        pull_timestamp = scrape_timestamp()
         roster = fetch_alliance_roster(alliance_id, debug=debug)
         payload = {
             "id": alliance_id,
             "alliance_name": alliance.get("alliance_name") or alliance.get("name"),
             "scraped_members": roster,
-            "scrape_timestamp": scrape_timestamp(),
+            "scrape_timestamp": pull_timestamp,
         }
 
         # This function must be the SAME one cron/startup uses.
         run_alliance_sync(payload)
+        record_pull_history(alliance_id, pull_timestamp, True, source="forcepull")
 
         log.info("Forcepull completed for guild %s", guild_id)
 
     except Exception:
         log.exception("Forcepull failed for guild %s", guild_id)
+        if alliance_id:
+            record_pull_history(
+                alliance_id,
+                pull_timestamp or scrape_timestamp(),
+                False,
+                source="forcepull",
+            )
         
 def handle_forcepull(payload: dict):
     guild_id = payload.get("guild_id")
@@ -276,3 +287,29 @@ def handle_name_changes_slash(payload: dict) -> dict:
         _send_followups_async(app_id, token, chunks[1:], ephemeral=True)
 
     return interaction_response(primary, ephemeral=True)
+
+
+def handle_pull_history_slash(payload: dict) -> dict:
+    guild_id = payload.get("guild_id") or "default"
+    alliance = _resolve_alliance(load_config(), guild_id)
+    if not alliance:
+        return interaction_response(
+            "❌ Pull history lookup failed: no alliance configured for this server.",
+            ephemeral=True,
+        )
+    state = load_state(alliance.get("id", guild_id))
+    history = list(state.get("pull_history") or [])
+    if not history:
+        return interaction_response(
+            "🧭 No pull history recorded yet.",
+            ephemeral=True,
+        )
+    recent = history[-5:]
+    lines = ["🧭 **Last 5 pulls**"]
+    for entry in reversed(recent):
+        ts = entry.get("timestamp", "Unknown time")
+        status = "✅ Success" if entry.get("success") else "❌ Failed"
+        source = entry.get("source")
+        suffix = f" ({source})" if source else ""
+        lines.append(f"- {ts} — {status}{suffix}")
+    return interaction_response("\n".join(lines), ephemeral=True)

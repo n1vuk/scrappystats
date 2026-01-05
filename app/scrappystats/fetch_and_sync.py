@@ -5,6 +5,7 @@ from .config import load_config, list_alliances
 from .log import configure_logging
 from .services.fetch import fetch_alliance_roster, scrape_timestamp
 from .services.sync import run_alliance_sync
+from .storage.state import record_pull_history
 from .utils import save_raw_json
 
 configure_logging()
@@ -40,8 +41,10 @@ def main() -> int:
                 except Exception:
                     log.exception("Failed to save raw JSON for alliance %s", alliance_id)
             run_alliance_sync(payload)
+            record_pull_history(alliance_id, timestamp, True, source="cron")
         except Exception:
             log.exception("Failed to fetch/sync alliance %s", alliance_id)
+            record_pull_history(alliance_id, timestamp, False, source="cron")
 
     return 0
 
