@@ -20,13 +20,13 @@ from ..discord_utils import interaction_response
 from scrappystats.config import load_config, get_guild_alliances
 #config = load_alliances()
 
+from ..services.fetch import fetch_alliance_roster, scrape_timestamp
 from ..services.sync import run_alliance_sync
 
 
 log = logging.getLogger("scrappystats.forcepull")
 
-def _resolve_alliance(guild_id: str) -> Optional[dict]:
-    config = load_config()
+def _resolve_alliance(config: dict, guild_id: str) -> Optional[dict]:
     alliances = get_guild_alliances(config, guild_id)
 
     if len(alliances) == 1:
@@ -40,22 +40,30 @@ def _resolve_alliance(guild_id: str) -> Optional[dict]:
 
 def _run_forcepull(guild_id: str):
     try:
-        # #config = load_config()
-        # config = load_alliances()
-        # alliance = config.get("alliances", {}).get(guild_id)
-
-        # if not alliance:
-        #     log.warning("Forcepull: no alliance configured for guild %s", guild_id)
-        #     return
-        alliance = _resolve_alliance(guild_id)
+        config = load_config()
+        alliance = _resolve_alliance(config, guild_id)
         if not alliance:
             log.error("Forcepull failed for guild %s: no alliance configured", guild_id)
             return
 
+        alliance_id = alliance.get("id")
+        if not alliance_id:
+            log.error("Forcepull failed for guild %s: alliance missing id", guild_id)
+            return
+
         log.info("Forcepull started for guild %s", guild_id)
 
-        # This function must be the SAME one cron/startup uses
-        run_alliance_sync(alliance)
+        debug = bool(config.get("debug"))
+        roster = fetch_alliance_roster(alliance_id, debug=debug)
+        payload = {
+            "id": alliance_id,
+            "alliance_name": alliance.get("alliance_name") or alliance.get("name"),
+            "scraped_members": roster,
+            "scrape_timestamp": scrape_timestamp(),
+        }
+
+        # This function must be the SAME one cron/startup uses.
+        run_alliance_sync(payload)
 
         log.info("Forcepull completed for guild %s", guild_id)
 
@@ -86,7 +94,7 @@ def handle_forcepull(payload: dict):
 def handle_fullroster(payload: dict) -> dict:
     """Return a formatted full roster response for the given guild."""
     guild_id = payload.get("guild_id") or "default"
-    alliance = _resolve_alliance(guild_id)
+    alliance = _resolve_alliance(load_config(), guild_id)
     if not alliance:
         return interaction_response(
             "❌ Full roster failed: no alliance configured for this server.",
