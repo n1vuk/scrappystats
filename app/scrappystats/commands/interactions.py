@@ -30,7 +30,7 @@ def _resolve_alliance(config: dict, guild_id: str) -> Optional[dict]:
     alliances = get_guild_alliances(config, guild_id)
 
     if len(alliances) == 1:
-        log.warning(
+        log.info(
             "Defaulting to the only configured alliance for guild %s",
             guild_id,
         )

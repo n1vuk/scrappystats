@@ -9,9 +9,9 @@ Created on Sun Dec 14 11:03:43 2025
 from datetime import datetime
 from typing import Literal
 
-from scrappystats.config import load_config, list_alliances
+from scrappystats.config import load_config, list_alliances, get_guild_alliances
 
-from .report_common import load_state_and_baseline, compute_deltas
+from .report_common import load_state_and_baseline, compute_deltas, make_table
 from ..webhook.sender import post_webhook_message
 
 ReportType = Literal["interim", "daily", "weekly"]
@@ -23,6 +23,42 @@ REPORT_TITLES = {
 }
 
 
+def build_service_reports(
+    report_type: ReportType,
+    *,
+    guild_id: str | None = None,
+) -> list[tuple[str, str]]:
+    """
+    Build report messages for each alliance.
+    """
+    cfg = load_config()
+    if guild_id:
+        alliances = get_guild_alliances(cfg, guild_id)
+    else:
+        alliances = list_alliances(cfg)
+
+    reports: list[tuple[str, str]] = []
+
+    for alliance in alliances:
+        alliance_id = alliance["id"]
+        alliance_name = alliance.get("name", alliance_id)
+
+        state, baseline = load_state_and_baseline(alliance_id, report_type)
+        deltas = compute_deltas(state, baseline)
+
+        message = format_service_report(
+            alliance_name=alliance_name,
+            report_type=report_type,
+            deltas=deltas,
+        )
+        if not message:
+            continue
+
+        reports.append((alliance_id, message))
+
+    return reports
+
+
 def run_service_report(report_type: ReportType) -> None:
     """
     Unified service report runner.
@@ -32,25 +68,8 @@ def run_service_report(report_type: ReportType) -> None:
       - daily    (yesterday)
       - weekly   (last 7 days)
     """
-    cfg = load_config()
-    alliances = list_alliances(cfg)
-
-    for alliance in alliances:
-        alliance_id = alliance["id"]
-        alliance_name = alliance.get("name", alliance_id)
-
-        state, baseline = load_state_and_baseline(alliance_id, report_type)
-        deltas = compute_deltas(state, baseline)
-
-        if not deltas:
-            continue
-
-        message = format_service_report(
-            alliance_name=alliance_name,
-            report_type=report_type,
-            deltas=deltas,
-        )
-
+    reports = build_service_reports(report_type)
+    for alliance_id, message in reports:
         post_webhook_message(message, alliance_id=alliance_id)
 
 def format_service_report(
@@ -58,21 +77,30 @@ def format_service_report(
     alliance_name: str,
     report_type: ReportType,
     deltas: dict,
-) -> str:
+) -> str | None:
+    rows = []
+    for member_name in sorted(deltas.keys()):
+        delta = deltas[member_name]
+        helps = delta.get("helps", 0)
+        rss = delta.get("rss", 0)
+        iso = delta.get("iso", 0)
+        if helps == 0 and rss == 0 and iso == 0:
+            continue
+        rows.append([member_name, helps, rss, iso])
+
+    if not rows:
+        return None
+
+    table = make_table(["Member", "Helps", "RSS", "ISO"], rows)
+
     lines = [
         REPORT_TITLES[report_type],
         f"**Alliance:** {alliance_name}",
         f"**Generated:** {datetime.utcnow().isoformat()}Z",
         "",
+        "```",
+        table,
+        "```",
     ]
-
-    for category, entries in deltas.items():
-        if not entries:
-            continue
-
-        lines.append(f"**{category.upper()}**")
-        for entry in entries:
-            lines.append(f"- {entry}")
-        lines.append("")
 
     return "\n".join(lines)
