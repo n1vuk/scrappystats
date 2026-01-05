@@ -96,6 +96,7 @@ def sync_alliance(alliance_cfg: dict) -> None:
     alliance_cfg is expected to contain at least:
       - id: str                 (alliance identifier)
       - scrape_timestamp: str   (ISO string)
+      - alliance_name: str
       - scraped_members: list[dict] with keys:
           - name: str
           - rank: str
@@ -103,6 +104,7 @@ def sync_alliance(alliance_cfg: dict) -> None:
           - join_date: 'YYYY-MM-DD' (from STFC.pro)
     """
     alliance_id = alliance_cfg.get("id", "default")
+    alliance_name = alliance_cfg.get("alliance_name")
     state = load_state(alliance_id)
 
     scraped_members = alliance_cfg.get("scraped_members", [])
@@ -195,9 +197,13 @@ def sync_alliance(alliance_cfg: dict) -> None:
     event_batch = []
 
     for m in joins:
-        event_batch.append({"type": "join", "member": m})
+        event_batch.append(
+            {"type": "join", "member": m, "alliance_name": alliance_name}
+        )
     for m in leaves:
-        event_batch.append({"type": "leave", "member": m})
+        event_batch.append(
+            {"type": "leave", "member": m, "alliance_name": alliance_name}
+        )
     for r in renames:
         event_batch.append(
             {
@@ -205,6 +211,7 @@ def sync_alliance(alliance_cfg: dict) -> None:
                 "member": r["member"],
                 "old_name": r["old_name"],
                 "new_name": r["new_name"],
+                "alliance_name": alliance_name,
             }
         )
     for p in promotions:
@@ -214,6 +221,7 @@ def sync_alliance(alliance_cfg: dict) -> None:
                 "member": p["member"],
                 "old_rank": p["old_rank"],
                 "new_rank": p["new_rank"],
+                "alliance_name": alliance_name,
             }
         )
     for d in demotions:
@@ -223,6 +231,7 @@ def sync_alliance(alliance_cfg: dict) -> None:
                 "member": d["member"],
                 "old_rank": d["old_rank"],
                 "new_rank": d["new_rank"],
+                "alliance_name": alliance_name,
             }
         )
     for ev in level_ups:
@@ -232,6 +241,7 @@ def sync_alliance(alliance_cfg: dict) -> None:
                 "member": ev["member"],
                 "old_level": ev["old_level"],
                 "new_level": ev["new_level"],
+                "alliance_name": alliance_name,
             }
         )
     for ev in rejoins:
@@ -240,6 +250,7 @@ def sync_alliance(alliance_cfg: dict) -> None:
                 "type": "rejoin",
                 "member": ev["member"],
                 "last_leave": ev["last_leave"],
+                "alliance_name": alliance_name,
             }
         )
 
@@ -289,6 +300,7 @@ def run_alliance_sync(alliance: dict) -> None:
 
     cfg = {
         "id": alliance_id,
+        "alliance_name": alliance.get("alliance_name"),
         "scraped_members": scraped_members,
         "scrape_timestamp": scrape_timestamp,
     }

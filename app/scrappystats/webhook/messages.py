@@ -128,10 +128,12 @@ def build_join_batch(events: list[Dict[str, Any]]) -> str:
             "🖖 **Counselor Troi to Bridge** New Commanders have beamed aboard **Unknown**."
         )
     alliance = _safe(events[0], "alliance_name")
-    names = [
-        _member_name(_get_member(event), event)
-        for event in events
-    ]
+    names = []
+    for event in events:
+        member = _get_member(event)
+        name = _member_name(member, event)
+        level = _member_level(member, event)
+        names.append(f"{name} (Level {level})")
     plural = len(names) != 1
     if plural:
         body = (
