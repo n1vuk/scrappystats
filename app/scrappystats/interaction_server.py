@@ -8,7 +8,12 @@ from .version import __version__
 from .utils import utcnow
 #from .commands.reports import handle_report
 from .commands.slash_service import handle_report_slash
-from .commands.interactions import handle_fullroster, handle_forcepull
+from .commands.interactions import (
+    handle_fullroster,
+    handle_forcepull,
+    handle_service_record_slash,
+    handle_name_changes_slash,
+)
 from scrappystats.config import load_config
 
 log = logging.getLogger("scrappystats.interactions")
@@ -36,6 +41,32 @@ COMMANDS = [
             {"type": 1, "name": "interimreport", "description": "Show the interim alliance report."},
             {"type": 1, "name": "forcepull", "description": "Force Scrappy to fetch new data."},
             {"type": 1, "name": "fullroster", "description": "Show full roster with join dates."},
+            {
+                "type": 1,
+                "name": "servicerecord",
+                "description": "Show a member's service record.",
+                "options": [
+                    {
+                        "type": 3,
+                        "name": "player",
+                        "description": "Exact player name to look up.",
+                        "required": True,
+                    }
+                ],
+            },
+            {
+                "type": 1,
+                "name": "namechanges",
+                "description": "Show recorded name changes.",
+                "options": [
+                    {
+                        "type": 3,
+                        "name": "player",
+                        "description": "Exact player name to filter.",
+                        "required": False,
+                    }
+                ],
+            },
             {"type": 1, "name": "help", "description": "Show help for all ScrappyStats commands."},
             {"type": 1, "name": "bark", "description": "Scrappy says hello."},
             {"type": 1, "name": "version", "description": "Show ScrappyStats version."},
@@ -90,6 +121,8 @@ def dispatch_command(sub_name: str, payload: dict):
         "dailyreport": lambda p: handle_report_slash(p, period="daily"),
         "weeklyreport": lambda p: handle_report_slash(p, period="weekly"),
         "interimreport": lambda p: handle_report_slash(p, period="interim"),
+        "servicerecord": handle_service_record_slash,
+        "namechanges": handle_name_changes_slash,
 
         "forcepull": handle_forcepull,
     }
