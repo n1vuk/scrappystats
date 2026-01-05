@@ -3,7 +3,7 @@
 
 Formats the current alliance roster from the v2 state structure.
 """
-from typing import Dict
+from typing import Dict, List
 from ..models.member import Member
 
 # Rank order from highest to lowest for display
@@ -22,8 +22,8 @@ def _deserialize_members(members_raw: Dict[str, dict]):
         members.append(Member.from_json(data))
     return members
 
-def full_roster_command(alliance_state: dict) -> str:
-    """Build a simple text roster table from the v2 alliance_state dict.
+def full_roster_messages(alliance_state: dict) -> List[str]:
+    """Build paginated roster messages from the v2 alliance_state dict.
 
     alliance_state is expected to be the dict returned by
     scrappystats.storage.state.load_state(alliance_id).
@@ -45,19 +45,30 @@ def full_roster_command(alliance_state: dict) -> str:
             return value.split("T", 1)[0]
         return value
 
-    lines = []
-    lines.append("📋 Full Roster")
-    lines.append("```")
-    lines.append(f"{'Rank':<10} {'Lvl':>3}  {'Last Join':<10} {'Orig Join':<10} Name")
-    lines.append("-" * 58)
+    max_length = 1900
+    header = f"{'Rank':<10} {'Lvl':>3}  {'Last Join':<10} {'Orig Join':<10} Name"
+    separator = "-" * 58
+
+    def build_intro(first: bool) -> List[str]:
+        title = "📋 Full Roster" if first else "📋 Full Roster (cont.)"
+        return [title, "```", header, separator]
+
+    chunks: List[str] = []
+    current = build_intro(True)
+
     for m in members:
         lvl = m.level if isinstance(m.level, int) else int(m.level or 0)
         last_join = format_join_date(m.last_join_date)
         orig_join = format_join_date(m.original_join_date)
-        lines.append(
-            f"{m.rank:<10} {lvl:>3}  {last_join:<10} {orig_join:<10} {m.name}"
-        )
-    lines.append("```")
-    return "\n".join(lines)
+        line = f"{m.rank:<10} {lvl:>3}  {last_join:<10} {orig_join:<10} {m.name}"
+        tentative = "\n".join(current + [line, "```"])
+        if len(tentative) > max_length and len(current) > 4:
+            chunks.append("\n".join(current + ["```"]))
+            current = build_intro(False)
+        current.append(line)
 
-__all__ = ["full_roster_command"]
+    chunks.append("\n".join(current + ["```"]))
+    return chunks
+
+
+__all__ = ["full_roster_messages"]

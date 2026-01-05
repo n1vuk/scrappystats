@@ -84,5 +84,29 @@ def interaction_response(content: str, ephemeral: bool = True) -> dict:
         data["flags"] = 64
     return {"type": 4, "data": data}
 
+def send_followup_message(
+    application_id: str,
+    token: str,
+    content: str,
+    ephemeral: bool = True,
+) -> None:
+    if not application_id or not token:
+        log.warning("Missing application_id or interaction token for followup message")
+        return
+    url = f"{DISCORD_API_BASE}/webhooks/{application_id}/{token}"
+    payload = {"content": content}
+    if ephemeral:
+        payload["flags"] = 64
+    try:
+        resp = requests.post(url, json=payload, timeout=10)
+        if resp.status_code not in (200, 204):
+            log.error(
+                "Failed to send followup message: %s %s",
+                resp.status_code,
+                resp.text,
+            )
+    except requests.RequestException:
+        log.exception("Failed to send followup message")
+
 def pong():
     return {"type": 1}

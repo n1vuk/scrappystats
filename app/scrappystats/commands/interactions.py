@@ -12,9 +12,9 @@ from typing import Optional
 
 from ..storage.state import load_state
 from ..models.member import Member
-from .slash_fullroster import full_roster_command
+from .slash_fullroster import full_roster_messages
 from .slash_service import service_record_command
-from ..discord_utils import interaction_response
+from ..discord_utils import interaction_response, send_followup_message
 # refactor allience load to new function
 # from ..config import load_config
 from scrappystats.config import load_config, get_guild_alliances
@@ -101,8 +101,14 @@ def handle_fullroster(payload: dict) -> dict:
             ephemeral=True,
         )
     state = load_state(alliance.get("id", guild_id))
-    message = full_roster_command(state)
-    return interaction_response(message, ephemeral=True)
+    messages = full_roster_messages(state)
+    primary = messages[0]
+    if len(messages) > 1:
+        app_id = payload.get("application_id")
+        token = payload.get("token")
+        for followup in messages[1:]:
+            send_followup_message(app_id, token, followup, ephemeral=True)
+    return interaction_response(primary, ephemeral=True)
 
 
 def _find_member_by_name(state: dict, name: str) -> Optional[Member]:
