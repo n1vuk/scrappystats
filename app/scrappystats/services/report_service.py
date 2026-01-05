@@ -6,13 +6,17 @@ Created on Sun Dec 14 11:03:43 2025
 @author: chris
 """
 
+import logging
 from datetime import datetime
 from typing import Literal
 
 from scrappystats.config import load_config, list_alliances, get_guild_alliances
+from scrappystats.utils import HISTORY_DIR, save_json
 
 from .report_common import load_state_and_baseline, compute_deltas, make_table
 from ..webhook.sender import post_webhook_message
+
+log = logging.getLogger(__name__)
 
 ReportType = Literal["interim", "daily", "weekly"]
 
@@ -71,6 +75,30 @@ def run_service_report(report_type: ReportType) -> None:
     reports = build_service_reports(report_type)
     for alliance_id, message in reports:
         post_webhook_message(message, alliance_id=alliance_id)
+    save_report_baselines(report_type)
+
+
+def save_report_baselines(report_type: ReportType, *, guild_id: str | None = None) -> None:
+    """
+    Persist the current service state as the baseline for future reports.
+    """
+    cfg = load_config()
+    if guild_id:
+        alliances = get_guild_alliances(cfg, guild_id)
+    else:
+        alliances = list_alliances(cfg)
+
+    for alliance in alliances:
+        alliance_id = alliance["id"]
+        state, _ = load_state_and_baseline(alliance_id, report_type)
+        baseline_path = HISTORY_DIR / report_type / f"{alliance_id}.json"
+        save_json(baseline_path, state)
+        log.info(
+            "Saved %s baseline for alliance %s at %s",
+            report_type,
+            alliance_id,
+            baseline_path,
+        )
 
 def format_service_report(
     *,

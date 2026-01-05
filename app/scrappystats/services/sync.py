@@ -1,14 +1,22 @@
 
 """Sync orchestrator for v2.0.0-dev with clean state, UUIDs, detection,
 service-history, and webhook dispatch wired in."""
+import logging
 from datetime import datetime
 from typing import Dict, List
 
 from ..storage.state import load_state, save_state, initialize_member
+from ..utils import (
+    save_json,
+    state_path as report_state_path,
+    history_snapshot_path,
+)
 from ..models.member import Member
 from .detection import detect_member_events
 from .service_record import add_service_event
 from .events import dispatch_webhook_events
+
+log = logging.getLogger(__name__)
 
 
 def _deserialize_members(raw_members: Dict[str, dict]) -> Dict[str, Member]:
@@ -114,11 +122,18 @@ def sync_alliance(alliance_cfg: dict) -> None:
     prev_raw = state.get("members", {}) or {}
     prev_members = _deserialize_members(prev_raw)
 
+    service_state = {}
+
     # Build current members from scrape, matching by name where possible
     curr_members: Dict[str, Member] = {}
 
     for scraped in scraped_members:
         name = scraped["name"]
+        service_state[name] = {
+            "helps": scraped.get("helps", 0) or 0,
+            "rss": scraped.get("rss", 0) or 0,
+            "iso": scraped.get("iso", 0) or 0,
+        }
         # Try to find an existing member with this name
         match_uuid = None
         for uid, m in prev_members.items():
@@ -272,6 +287,17 @@ def sync_alliance(alliance_cfg: dict) -> None:
     state["members"] = _serialize_members(final_members)
     state["last_sync"] = scrape_timestamp
     save_state(alliance_id, state)
+
+    report_state = report_state_path(alliance_id)
+    history_snapshot = history_snapshot_path(alliance_id, scrape_timestamp)
+    save_json(report_state, service_state)
+    save_json(history_snapshot, service_state)
+    log.info(
+        "Saved service state for alliance %s (current=%s, snapshot=%s)",
+        alliance_id,
+        report_state,
+        history_snapshot,
+    )
 
 # def run_alliance_sync(alliance: dict) -> None:
 #     """

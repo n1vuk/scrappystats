@@ -47,11 +47,56 @@ def _parse_number(txt: str) -> int:
             return 0
 
 
+def _header_cells(table) -> list[str]:
+    header_row = None
+    thead = table.find("thead")
+    if thead:
+        header_row = thead.find("tr")
+    if not header_row:
+        header_row = table.find("tr")
+    if not header_row:
+        return []
+    return [
+        cell.get_text(strip=True).lower()
+        for cell in header_row.find_all(["th", "td"])
+    ]
+
+
+def _find_header_index(headers: list[str], keys: tuple[str, ...]) -> int | None:
+    for idx, header in enumerate(headers):
+        if not header:
+            continue
+        for key in keys:
+            if key in header:
+                return idx
+    return None
+
+
+def _cell_text(
+    cells,
+    headers: list[str],
+    keys: tuple[str, ...],
+    *,
+    fallback_idx: int | None = None,
+    fallback_last: bool = False,
+) -> str | None:
+    idx = _find_header_index(headers, keys)
+    if idx is not None and 0 <= idx < len(cells):
+        return cells[idx].get_text(strip=True)
+    if fallback_last and cells:
+        return cells[-1].get_text(strip=True)
+    if fallback_idx is not None and fallback_idx < len(cells):
+        return cells[fallback_idx].get_text(strip=True)
+    return None
+
+
 def parse_roster(html: str) -> Dict[str, dict]:
     soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table")
     if not table:
         raise RuntimeError("Roster table not found")
+
+    headers = _header_cells(table)
 
     roster: Dict[str, dict] = {}
     for tr in table.find_all("tr"):
@@ -74,14 +119,48 @@ def parse_roster(html: str) -> Dict[str, dict]:
         except Exception:
             level = 0
 
-        rss = _parse_number(tds[4].get_text(strip=True))
-        iso = _parse_number(tds[5].get_text(strip=True))
-        join_date = tds[6].get_text(strip=True)
+        helps_text = _cell_text(
+            tds,
+            headers,
+            ("helps", "help"),
+            fallback_idx=4 if len(tds) >= 8 else None,
+        )
+        has_helps = helps_text is not None
+        helps = _parse_number(helps_text) if has_helps else 0
+        rss = _parse_number(
+            _cell_text(
+                tds,
+                headers,
+                ("rss", "resources", "resource"),
+                fallback_idx=5 if has_helps else 4,
+            )
+            or ""
+        )
+        iso = _parse_number(
+            _cell_text(
+                tds,
+                headers,
+                ("iso", "isogen"),
+                fallback_idx=6 if has_helps else 5,
+            )
+            or ""
+        )
+        join_date = (
+            _cell_text(
+                tds,
+                headers,
+                ("join date", "joined", "join"),
+                fallback_idx=7 if has_helps else 6,
+                fallback_last=True,
+            )
+            or ""
+        )
 
         roster[name] = {
             "name": name,
             "rank": role,
             "level": level,
+            "helps": helps,
             "rss": rss,
             "iso": iso,
             "join_date": join_date,
