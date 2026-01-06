@@ -2,11 +2,24 @@
   "admin_webhook": "https://discord.com/api/webhooks/ADMIN_WEBHOOK_HERE",
   "admins": ["123456789012345678"],
   "debug": false,
+  "webhook": "https://discord.com/api/webhooks/FALLBACK_WEBHOOK_HERE",
   "alliances": [
     {
       "id": "324544715",
       "name": "Spawn of Venom",
       "webhook": "https://discord.com/api/webhooks/ALLIANCE_WEBHOOK_HERE"
+    }
+  ],
+  "guilds": [
+    {
+      "id": "112233445566778899",
+      "alliances": [
+        {
+          "id": "987654321",
+          "name": "Warped Coalition",
+          "webhook": "https://discord.com/api/webhooks/GUILD_WEBHOOK_HERE"
+        }
+      ]
     }
   ]
 }

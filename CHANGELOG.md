@@ -138,3 +138,5 @@
 - Fix: remove embedded uvicorn startup from interaction_server
 
 ## through 3.0.0 stabalizing refactor
+
+## v3.1 completed stabilizing refactor

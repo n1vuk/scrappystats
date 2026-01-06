@@ -7,13 +7,18 @@ Created on Sun Dec 14 11:03:43 2025
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 from scrappystats.config import load_config, list_alliances, get_guild_alliances
 from scrappystats.utils import HISTORY_DIR, save_json
 
-from .report_common import load_state_and_baseline, compute_deltas, make_table
+from .report_common import (
+    load_state_and_baseline,
+    compute_deltas,
+    make_table,
+    load_snapshot_at_or_before,
+)
 from ..webhook.sender import post_webhook_message
 
 log = logging.getLogger(__name__)
@@ -43,12 +48,34 @@ def build_service_reports(
 
     reports: list[tuple[str, str]] = []
 
+    now = datetime.now(timezone.utc)
+    start_of_today = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
+    if report_type == "interim":
+        start_dt = start_of_today
+        end_dt = now
+    elif report_type == "daily":
+        start_dt = start_of_today - timedelta(days=1)
+        end_dt = start_of_today
+    else:
+        start_dt = start_of_today - timedelta(days=7)
+        end_dt = start_of_today
+
     for alliance in alliances:
         alliance_id = alliance["id"]
         alliance_name = alliance.get("name", alliance_id)
 
         state, baseline = load_state_and_baseline(alliance_id, report_type)
-        deltas = compute_deltas(state, baseline)
+        start_snapshot = load_snapshot_at_or_before(alliance_id, start_dt)
+        end_snapshot = load_snapshot_at_or_before(alliance_id, end_dt)
+        current = end_snapshot or state
+
+        if report_type == "interim":
+            previous = start_snapshot or current
+        else:
+            previous = start_snapshot or baseline
+        if report_type == "interim" and start_snapshot is None:
+            previous = current 
+        deltas = compute_deltas(current, previous)
 
         message = format_service_report(
             alliance_name=alliance_name,

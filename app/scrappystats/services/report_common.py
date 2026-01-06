@@ -1,3 +1,6 @@
+from datetime import datetime, timezone
+from pathlib import Path
+
 from scrappystats.utils import load_json, history_snapshot_path, DATA_ROOT, HISTORY_DIR
 
 
@@ -24,6 +27,40 @@ def load_snapshots(alliance_id: str, start_ts: str, end_ts: str):
     end = load_json(history_snapshot_path(alliance_id, end_ts), {})
     return start, end
 
+
+def _parse_snapshot_ts(path: Path) -> datetime | None:
+    try:
+        return datetime.fromisoformat(path.stem.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def load_snapshot_at_or_before(alliance_id: str, target_dt: datetime) -> dict:
+    """
+    Load the most recent snapshot at or before the target timestamp.
+    """
+    history_dir = HISTORY_DIR / alliance_id
+    if not history_dir.exists():
+        return {}
+
+    if target_dt.tzinfo is None:
+        target_dt = target_dt.replace(tzinfo=timezone.utc)
+
+    best_path: Path | None = None
+    best_ts: datetime | None = None
+    for file in history_dir.glob("*.json"):
+        ts = _parse_snapshot_ts(file)
+        if ts is None or ts > target_dt:
+            continue
+        if best_ts is None or ts > best_ts:
+            best_ts = ts
+            best_path = file
+
+    if best_path is None:
+        return {}
+
+    return load_json(best_path, {})
+
 def compute_deltas(cur: dict, prev: dict):
     deltas = {}
     for name, pdata in cur.items():
@@ -46,13 +83,25 @@ def make_table(headers, rows):
     if not rows:
         return "No data available."
 
+    def is_number(value) -> bool:
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+
     widths = [len(h) for h in headers]
     for row in rows:
         for i, cell in enumerate(row):
             widths[i] = max(widths[i], len(str(cell)))
 
+    numeric_cols = []
+    for idx in range(len(headers)):
+        column_values = [row[idx] for row in rows if idx < len(row)]
+        numeric_cols.append(bool(column_values) and all(is_number(v) for v in column_values))
+
+    def fmt_cell(cell, idx):
+        text = str(cell)
+        return text.rjust(widths[idx]) if numeric_cols[idx] else text.ljust(widths[idx])
+
     def fmt_row(row):
-        return " | ".join(str(cell).ljust(widths[i]) for i, cell in enumerate(row))
+        return " | ".join(fmt_cell(cell, i) for i, cell in enumerate(row))
 
     lines = [
         fmt_row(headers),
