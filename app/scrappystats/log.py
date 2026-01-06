@@ -1,5 +1,6 @@
 import logging
 import os
+from pathlib import Path
 from typing import Optional
 
 from .config import load_config
@@ -7,6 +8,7 @@ from .config import load_config
 log = logging.getLogger("scrappystats")
 
 DEFAULT_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
+DEFAULT_LOG_DIR = Path(os.getenv("SCRAPPYSTATS_LOG_DIR", "/logs"))
 
 
 def _resolve_log_level() -> int:
@@ -21,4 +23,12 @@ def _resolve_log_level() -> int:
 
 def configure_logging(level: Optional[int] = None) -> None:
     resolved = level if level is not None else _resolve_log_level()
-    logging.basicConfig(level=resolved, format=DEFAULT_LOG_FORMAT)
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+    try:
+        DEFAULT_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(DEFAULT_LOG_DIR / "scrappystats.log")
+        handlers.append(file_handler)
+    except OSError:
+        log.warning("Failed to initialize log file in %s", DEFAULT_LOG_DIR)
+
+    logging.basicConfig(level=resolved, format=DEFAULT_LOG_FORMAT, handlers=handlers)

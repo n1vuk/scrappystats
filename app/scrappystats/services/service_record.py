@@ -4,3 +4,4 @@ def add_service_event(member, event_type, **kwargs):
     event = {"type": event_type, "timestamp": datetime.now(timezone.utc).isoformat()}
     event.update(kwargs)
     member.service_events.append(event)
+    return event

@@ -11,7 +11,11 @@ from ..utils import (
     save_json,
     state_path as report_state_path,
     history_snapshot_path,
+<<<<<<< ours
     PENDING_RENAMES_DIR,
+=======
+    append_event,
+>>>>>>> theirs
 )
 from ..models.member import Member
 from .detection import detect_member_events
@@ -339,11 +343,23 @@ def sync_alliance(alliance_cfg: dict) -> None:
         add_service_event(m, "leave")
 
     for r in renames:
-        add_service_event(
+        rename_event = add_service_event(
             r["member"],
             "rename",
             old_name=r["old_name"],
             new_name=r["new_name"],
+        )
+        append_event(
+            alliance_id,
+            {
+                "type": "rename",
+                "timestamp": rename_event["timestamp"],
+                "member_uuid": r["member"].uuid,
+                "member_name": r["member"].name,
+                "old_name": r["old_name"],
+                "new_name": r["new_name"],
+                "alliance_name": alliance_name,
+            },
         )
 
     for p in promotions:
