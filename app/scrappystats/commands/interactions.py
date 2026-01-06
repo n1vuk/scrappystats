@@ -9,9 +9,10 @@ import logging
 import threading
 import time
 
+from pathlib import Path
 from typing import Optional
 
-from ..storage.state import load_state, record_pull_history
+from ..storage.state import load_state, record_pull_history, save_state
 from ..models.member import Member
 from .slash_fullroster import full_roster_messages
 from .slash_service import service_record_command
@@ -23,6 +24,8 @@ from scrappystats.config import load_config, get_guild_alliances
 
 from ..services.fetch import fetch_alliance_roster, scrape_timestamp
 from ..services.sync import run_alliance_sync
+from ..services.service_record import add_service_event
+from ..utils import load_json, save_json, PENDING_RENAMES_DIR
 
 
 log = logging.getLogger("scrappystats.forcepull")
@@ -154,6 +157,16 @@ def _find_member_by_name(state: dict, name: str) -> Optional[Member]:
     return None
 
 
+def _find_member_record(state: dict, name: str) -> tuple[Optional[str], Optional[Member]]:
+    target = name.lower()
+    members_raw = (state.get("members") or {}).items()
+    for uid, data in members_raw:
+        member = Member.from_json(data)
+        if member.name.lower() == target:
+            return uid, member
+    return None, None
+
+
 def handle_service_record(alliance_id: str, player_name: str) -> str:
     """Return a formatted service record for the given player name.
 
@@ -195,6 +208,64 @@ def handle_service_record_slash(payload: dict) -> dict:
     alliance_id = alliance.get("id", guild_id)
     message = handle_service_record(alliance_id, player_name)
     return interaction_response(message, ephemeral=True)
+
+
+def _pending_rename_files(alliance_id: str) -> list[Path]:
+    return sorted(PENDING_RENAMES_DIR.glob(f"{alliance_id}_*.json"))
+
+
+def _load_pending_renames(alliance_id: str) -> list[dict]:
+    pending: list[dict] = []
+    for path in _pending_rename_files(alliance_id):
+        records = load_json(path, [])
+        for idx, record in enumerate(records):
+            pending.append(
+                {
+                    "path": path,
+                    "index": idx,
+                    "record": record,
+                }
+            )
+    return pending
+
+
+def _update_pending_file(path: Path, records: list[dict]) -> None:
+    if not records:
+        if path.exists():
+            path.unlink()
+        return
+    save_json(path, records)
+
+
+def _apply_manual_rename(alliance_id: str, old_name: str, new_name: str) -> str:
+    state = load_state(alliance_id)
+    old_uid, old_member = _find_member_record(state, old_name)
+    new_uid, new_member = _find_member_record(state, new_name)
+
+    if not old_member:
+        return f"❌ Could not find an officer named '{old_name}'."
+    if not new_member:
+        return f"❌ Could not find an officer named '{new_name}'."
+    if old_uid == new_uid:
+        return "⚠️ These names already refer to the same officer."
+
+    if old_member.name not in old_member.previous_names:
+        old_member.previous_names.append(old_member.name)
+    if new_member.name not in old_member.previous_names:
+        old_member.previous_names.append(new_member.name)
+    old_member.name = new_member.name
+    old_member.rank = new_member.rank
+    old_member.level = new_member.level
+    old_member.service_events.extend(new_member.service_events or [])
+    add_service_event(old_member, "rename", old_name=old_name, new_name=new_name)
+
+    members = state.get("members") or {}
+    members[old_uid] = old_member.to_json()
+    if new_uid in members:
+        del members[new_uid]
+    state["members"] = members
+    save_state(alliance_id, state)
+    return f"✅ Updated {old_name} to **{new_name}** and merged records."
 
 
 def _chunk_lines(lines: list[str], limit: int = 1900) -> list[str]:
@@ -287,6 +358,105 @@ def handle_name_changes_slash(payload: dict) -> dict:
         _send_followups_async(app_id, token, chunks[1:], ephemeral=True)
 
     return interaction_response(primary, ephemeral=True)
+
+
+def handle_rename_review_slash(payload: dict) -> dict:
+    guild_id = payload.get("guild_id") or "default"
+    alliance = _resolve_alliance(load_config(), guild_id)
+    if not alliance:
+        return interaction_response(
+            "❌ Rename review failed: no alliance configured for this server.",
+            ephemeral=True,
+        )
+    alliance_id = alliance.get("id", guild_id)
+    action = (_get_subcommand_option(payload, "action") or "list").lower()
+    old_name = _get_subcommand_option(payload, "old_name")
+    new_name = _get_subcommand_option(payload, "new_name")
+
+    pending = _load_pending_renames(alliance_id)
+    if action == "list":
+        if not pending:
+            return interaction_response(
+                "🛟 No pending rename reviews found.",
+                ephemeral=True,
+            )
+        lines = ["🛟 **Pending rename reviews**"]
+        for item in pending:
+            record = item["record"]
+            old = record.get("old_name", "Unknown")
+            new = record.get("new_name", "Unknown")
+            reason = record.get("reason", "manual_review")
+            notes = ", ".join(record.get("notes", [])) or record.get("notes") or "no metrics"
+            lines.append(f"- {old} → **{new}** ({reason}; {notes})")
+        chunks = _chunk_lines(lines)
+        primary = chunks[0]
+        if len(chunks) > 1:
+            app_id = payload.get("application_id")
+            token = payload.get("token")
+            _send_followups_async(app_id, token, chunks[1:], ephemeral=True)
+        return interaction_response(primary, ephemeral=True)
+
+    if action not in {"approve", "decline"}:
+        return interaction_response(
+            "❌ Invalid action. Use `list`, `approve`, or `decline`.",
+            ephemeral=True,
+        )
+    if not old_name or not new_name:
+        return interaction_response(
+            "❌ Provide both old_name and new_name for approve/decline.",
+            ephemeral=True,
+        )
+
+    matched = None
+    for item in pending:
+        record = item["record"]
+        if (
+            str(record.get("old_name", "")).lower() == old_name.lower()
+            and str(record.get("new_name", "")).lower() == new_name.lower()
+        ):
+            matched = item
+            break
+
+    if not matched:
+        return interaction_response(
+            "⚠️ No pending rename review found for that pair.",
+            ephemeral=True,
+        )
+
+    if action == "approve":
+        result = _apply_manual_rename(alliance_id, old_name, new_name)
+        if not result.startswith("✅"):
+            return interaction_response(result, ephemeral=True)
+    else:
+        result = f"🗑️ Declined pending rename: {old_name} → {new_name}."
+
+    path = matched["path"]
+    records = load_json(path, [])
+    index = matched["index"]
+    if 0 <= index < len(records):
+        records.pop(index)
+    _update_pending_file(path, records)
+    return interaction_response(result, ephemeral=True)
+
+
+def handle_manual_rename_slash(payload: dict) -> dict:
+    guild_id = payload.get("guild_id") or "default"
+    alliance = _resolve_alliance(load_config(), guild_id)
+    if not alliance:
+        return interaction_response(
+            "❌ Manual rename failed: no alliance configured for this server.",
+            ephemeral=True,
+        )
+    old_name = _get_subcommand_option(payload, "old_name")
+    new_name = _get_subcommand_option(payload, "new_name")
+    if not old_name or not new_name:
+        return interaction_response(
+            "❌ Provide both old_name and new_name.",
+            ephemeral=True,
+        )
+    alliance_id = alliance.get("id", guild_id)
+    message = _apply_manual_rename(alliance_id, old_name, new_name)
+    return interaction_response(message, ephemeral=True)
 
 
 def handle_pull_history_slash(payload: dict) -> dict:

@@ -13,6 +13,8 @@ from .commands.interactions import (
     handle_forcepull,
     handle_service_record_slash,
     handle_name_changes_slash,
+    handle_rename_review_slash,
+    handle_manual_rename_slash,
     handle_pull_history_slash,
 )
 from scrappystats.config import load_config
@@ -67,6 +69,50 @@ COMMANDS = [
                         "description": "Exact player name to filter.",
                         "required": False,
                     }
+                ],
+            },
+            {
+                "type": 1,
+                "name": "renamereview",
+                "description": "Review pending rename matches.",
+                "options": [
+                    {
+                        "type": 3,
+                        "name": "action",
+                        "description": "list, approve, or decline.",
+                        "required": False,
+                    },
+                    {
+                        "type": 3,
+                        "name": "old_name",
+                        "description": "Old/off-roster name.",
+                        "required": False,
+                    },
+                    {
+                        "type": 3,
+                        "name": "new_name",
+                        "description": "New/on-roster name.",
+                        "required": False,
+                    },
+                ],
+            },
+            {
+                "type": 1,
+                "name": "manualrename",
+                "description": "Manually reconcile a name change.",
+                "options": [
+                    {
+                        "type": 3,
+                        "name": "old_name",
+                        "description": "Old/off-roster name.",
+                        "required": True,
+                    },
+                    {
+                        "type": 3,
+                        "name": "new_name",
+                        "description": "New/on-roster name.",
+                        "required": True,
+                    },
                 ],
             },
             {"type": 1, "name": "help", "description": "Show help for all ScrappyStats commands."},
@@ -125,6 +171,8 @@ def dispatch_command(sub_name: str, payload: dict):
         "interimreport": lambda p: handle_report_slash(p, period="interim"),
         "servicerecord": handle_service_record_slash,
         "namechanges": handle_name_changes_slash,
+        "renamereview": handle_rename_review_slash,
+        "manualrename": handle_manual_rename_slash,
         "pullhistory": handle_pull_history_slash,
 
         "forcepull": handle_forcepull,

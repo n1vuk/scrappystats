@@ -7,9 +7,11 @@ from typing import Dict, List
 
 from ..storage.state import load_state, save_state, initialize_member
 from ..utils import (
+    load_json,
     save_json,
     state_path as report_state_path,
     history_snapshot_path,
+    PENDING_RENAMES_DIR,
 )
 from ..models.member import Member
 from .detection import detect_member_events
@@ -98,6 +100,163 @@ def _detect_rejoins(previous: Dict[str, Member],
     return rejoins
 
 
+def _member_join_date(member: Member) -> str:
+    for attr in ("last_join_date", "original_join_date"):
+        value = getattr(member, attr, None)
+        if value:
+            return str(value).split("T", 1)[0]
+    return ""
+
+
+def _within_percent(old: float, new: float, threshold: float) -> bool:
+    if old == 0:
+        return new == 0
+    return abs(new - old) / old <= threshold
+
+
+def _contrib_score(old_stats: dict, new_stats: dict) -> tuple[bool, float, list[str]]:
+    try:
+        old_helps = float(old_stats.get("helps", 0) or 0)
+        old_rss = float(old_stats.get("rss", 0) or 0)
+        old_iso = float(old_stats.get("iso", 0) or 0)
+        new_helps = float(new_stats.get("helps", 0) or 0)
+        new_rss = float(new_stats.get("rss", 0) or 0)
+        new_iso = float(new_stats.get("iso", 0) or 0)
+    except (TypeError, ValueError):
+        return False, float("inf"), ["invalid contribution data"]
+
+    helps_diff = abs(new_helps - old_helps)
+    rss_match = _within_percent(old_rss, new_rss, 0.05)
+    iso_match = _within_percent(old_iso, new_iso, 0.05)
+    helps_match = helps_diff <= 200
+    pct_rss = 0.0 if old_rss == 0 and new_rss == 0 else abs(new_rss - old_rss) / (old_rss or 1)
+    pct_iso = 0.0 if old_iso == 0 and new_iso == 0 else abs(new_iso - old_iso) / (old_iso or 1)
+    score = helps_diff + pct_rss + pct_iso
+    notes = [
+        f"helps Δ{helps_diff:.0f}",
+        f"rss Δ{pct_rss:.1%}",
+        f"iso Δ{pct_iso:.1%}",
+    ]
+    return helps_match and rss_match and iso_match, score, notes
+
+
+def _clone_member(member: Member) -> Member:
+    return Member.from_json(member.to_json())
+
+
+def _reconcile_name_changes(
+    prev_members: Dict[str, Member],
+    curr_members: Dict[str, Member],
+    prev_service_state: dict,
+    curr_service_state: dict,
+    scrape_timestamp: str,
+    alliance_id: str,
+) -> list[dict]:
+    join_ids = [uid for uid in curr_members if uid not in prev_members]
+    leave_ids = [uid for uid in prev_members if uid not in curr_members]
+    if not join_ids or not leave_ids:
+        return []
+
+    pending_events: list[dict] = []
+    pending_records: list[dict] = []
+    unmatched_leaves = set(leave_ids)
+
+    for join_id in join_ids:
+        if not unmatched_leaves:
+            break
+        join_member = curr_members[join_id]
+        join_date = _member_join_date(join_member)
+
+        guaranteed = [
+            leave_id
+            for leave_id in sorted(unmatched_leaves, key=lambda uid: prev_members[uid].name.lower())
+            if (
+                prev_members[leave_id].level == join_member.level
+                and _member_join_date(prev_members[leave_id]) == join_date
+                and join_date
+            )
+        ]
+
+        matched_leave = None
+        if len(guaranteed) == 1:
+            matched_leave = guaranteed[0]
+        elif len(guaranteed) > 1:
+            matched_leave = guaranteed[0]
+        else:
+            best_score = float("inf")
+            best_leave = None
+            best_notes: list[str] = []
+            for leave_id in unmatched_leaves:
+                old_member = prev_members[leave_id]
+                old_stats = prev_service_state.get(old_member.name, {})
+                new_stats = curr_service_state.get(join_member.name, {})
+                if not old_stats or not new_stats:
+                    continue
+                matched, score, notes = _contrib_score(old_stats, new_stats)
+                if matched and score < best_score:
+                    best_score = score
+                    best_leave = leave_id
+                    best_notes = notes
+            if best_leave:
+                matched_leave = best_leave
+            else:
+                # Flag for manual review if we have any leaves to compare against.
+                candidate_leave = sorted(
+                    unmatched_leaves,
+                    key=lambda uid: prev_members[uid].name.lower(),
+                )[0]
+                old_member = prev_members[candidate_leave]
+                old_stats = prev_service_state.get(old_member.name, {})
+                new_stats = curr_service_state.get(join_member.name, {})
+                matched, score, notes = _contrib_score(old_stats, new_stats) if old_stats and new_stats else (
+                    False,
+                    float("inf"),
+                    ["no contribution data"],
+                )
+                pending_events.append(
+                    {
+                        "type": "rename_review",
+                        "old_name": old_member.name,
+                        "new_name": join_member.name,
+                        "reason": "Manual review required",
+                        "notes": ", ".join(notes),
+                        "scrape_timestamp": scrape_timestamp,
+                        "alliance_id": alliance_id,
+                    }
+                )
+                pending_records.append(
+                    {
+                        "old_name": old_member.name,
+                        "new_name": join_member.name,
+                        "reason": "manual_review",
+                        "notes": notes,
+                        "matched": matched,
+                        "score": score,
+                        "timestamp": scrape_timestamp,
+                    }
+                )
+                continue
+
+        if matched_leave:
+            old_member = prev_members[matched_leave]
+            updated = _clone_member(old_member)
+            updated.name = join_member.name
+            updated.rank = join_member.rank
+            updated.level = join_member.level
+            if old_member.name not in updated.previous_names:
+                updated.previous_names.append(old_member.name)
+            curr_members[matched_leave] = updated
+            del curr_members[join_id]
+            unmatched_leaves.discard(matched_leave)
+
+    if pending_records:
+        safe_stamp = scrape_timestamp.replace(":", "-")
+        pending_path = PENDING_RENAMES_DIR / f"{alliance_id}_{safe_stamp}.json"
+        save_json(pending_path, pending_records)
+
+    return pending_events
+
+
 def sync_alliance(alliance_cfg: dict) -> None:
     """Run a single sync for one alliance.
 
@@ -122,6 +281,7 @@ def sync_alliance(alliance_cfg: dict) -> None:
     prev_raw = state.get("members", {}) or {}
     prev_members = _deserialize_members(prev_raw)
 
+    prev_service_state = load_json(report_state_path(alliance_id), {})
     service_state = {}
 
     # Build current members from scrape, matching by name where possible
@@ -142,8 +302,8 @@ def sync_alliance(alliance_cfg: dict) -> None:
                 break
 
         if match_uuid:
-            # Existing member: update fields in-place
-            m = prev_members[match_uuid]
+            # Existing member: update fields in a copy to preserve previous state
+            m = _clone_member(prev_members[match_uuid])
             m.name = scraped["name"]
             m.rank = scraped.get("rank", m.rank)
             m.level = scraped.get("level", m.level)
@@ -154,6 +314,15 @@ def sync_alliance(alliance_cfg: dict) -> None:
             m_json = initialize_member(scraped, scrape_timestamp)
             m = Member.from_json(m_json)
             curr_members[m.uuid] = m
+
+    pending_rename_events = _reconcile_name_changes(
+        prev_members,
+        curr_members,
+        prev_service_state,
+        service_state,
+        scrape_timestamp,
+        alliance_id,
+    )
 
     # Run detection on Member objects
     joins, leaves, renames, promotions, demotions = detect_member_events(prev_members, curr_members)
@@ -268,6 +437,9 @@ def sync_alliance(alliance_cfg: dict) -> None:
                 "alliance_name": alliance_name,
             }
         )
+    for ev in pending_rename_events:
+        ev["alliance_name"] = alliance_name
+        event_batch.append(ev)
 
     # Dispatch webhook messages for all events.
     try:

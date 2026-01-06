@@ -67,6 +67,7 @@ def _build_messages(events: List[Dict[str, Any]]) -> list[str]:
         "rejoin": messages.build_rejoin_batch,
         "leave": messages.build_leave_batch,
         "rename": messages.build_rename_batch,
+        "rename_review": messages.build_rename_review_batch,
         "promotion": messages.build_promotion_batch,
         "demotion": messages.build_demotion_batch,
         "level_up": messages.build_level_up_batch,

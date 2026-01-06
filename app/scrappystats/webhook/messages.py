@@ -182,6 +182,17 @@ def build_rename_batch(events: list[Dict[str, Any]]) -> str:
     return _header_line("🗂 **Identity update**", lines)
 
 
+def build_rename_review_batch(events: list[Dict[str, Any]]) -> str:
+    lines = []
+    for event in events:
+        old_name = _safe(event, "old_name")
+        new_name = _safe(event, "new_name")
+        reason = _safe(event, "reason")
+        notes = event.get("notes") or "no additional metrics"
+        lines.append(f"- Possible rename: {old_name} → **{new_name}** ({reason}; {notes})")
+    return _header_line("🛟 **Rename review needed**", lines)
+
+
 def build_promotion_batch(events: list[Dict[str, Any]]) -> str:
     lines = []
     for event in events:
