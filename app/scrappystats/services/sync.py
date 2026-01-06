@@ -11,11 +11,8 @@ from ..utils import (
     save_json,
     state_path as report_state_path,
     history_snapshot_path,
-<<<<<<< ours
     PENDING_RENAMES_DIR,
-=======
     append_event,
->>>>>>> theirs
 )
 from ..models.member import Member
 from .detection import detect_member_events
