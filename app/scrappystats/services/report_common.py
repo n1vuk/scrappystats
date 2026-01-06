@@ -1,3 +1,6 @@
+from datetime import datetime, timezone
+from pathlib import Path
+
 from scrappystats.utils import load_json, history_snapshot_path, DATA_ROOT, HISTORY_DIR
 
 
@@ -23,6 +26,40 @@ def load_snapshots(alliance_id: str, start_ts: str, end_ts: str):
     start = load_json(history_snapshot_path(alliance_id, start_ts), {})
     end = load_json(history_snapshot_path(alliance_id, end_ts), {})
     return start, end
+
+
+def _parse_snapshot_ts(path: Path) -> datetime | None:
+    try:
+        return datetime.fromisoformat(path.stem.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def load_snapshot_at_or_before(alliance_id: str, target_dt: datetime) -> dict:
+    """
+    Load the most recent snapshot at or before the target timestamp.
+    """
+    history_dir = HISTORY_DIR / alliance_id
+    if not history_dir.exists():
+        return {}
+
+    if target_dt.tzinfo is None:
+        target_dt = target_dt.replace(tzinfo=timezone.utc)
+
+    best_path: Path | None = None
+    best_ts: datetime | None = None
+    for file in history_dir.glob("*.json"):
+        ts = _parse_snapshot_ts(file)
+        if ts is None or ts > target_dt:
+            continue
+        if best_ts is None or ts > best_ts:
+            best_ts = ts
+            best_path = file
+
+    if best_path is None:
+        return {}
+
+    return load_json(best_path, {})
 
 def compute_deltas(cur: dict, prev: dict):
     deltas = {}
