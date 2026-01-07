@@ -68,7 +68,7 @@ def build_service_reports(
         start_snapshot = load_snapshot_at_or_before(alliance_id, start_dt)
         end_snapshot = load_snapshot_at_or_before(alliance_id, end_dt)
         current = end_snapshot or state
-
+        
         if report_type == "interim":
             previous = start_snapshot or current
         else:
