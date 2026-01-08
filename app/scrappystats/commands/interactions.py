@@ -24,6 +24,7 @@ from scrappystats.config import load_config, get_guild_alliances
 
 from ..services.fetch import fetch_alliance_roster, scrape_timestamp
 from ..services.sync import run_alliance_sync
+from ..services.test_mode import is_test_mode_enabled, load_test_roster
 from ..services.service_record import add_service_event
 from ..utils import load_json, save_json, PENDING_RENAMES_DIR
 
@@ -61,6 +62,7 @@ def _resolve_alliance(config: dict, guild_id: str) -> Optional[dict]:
 def _run_forcepull(guild_id: str):
     alliance_id = None
     pull_timestamp = None
+    alliance = None
     try:
         config = load_config()
         alliance = _resolve_alliance(config, guild_id)
@@ -77,7 +79,23 @@ def _run_forcepull(guild_id: str):
 
         debug = bool(config.get("debug"))
         pull_timestamp = scrape_timestamp()
-        roster = fetch_alliance_roster(alliance_id, debug=debug)
+        if is_test_mode_enabled(alliance):
+            test_payload = load_test_roster(alliance_id)
+            if not test_payload:
+                record_pull_history(alliance_id, pull_timestamp, False, source="test")
+                log.error("Forcepull failed: no test data available for alliance %s", alliance_id)
+                return
+            roster, pull_timestamp = test_payload
+            source = "test"
+            log.info(
+                "Forcepull test mode using %s members at %s for alliance %s.",
+                len(roster),
+                pull_timestamp,
+                alliance_id,
+            )
+        else:
+            roster = fetch_alliance_roster(alliance_id, debug=debug)
+            source = "forcepull"
         payload = {
             "id": alliance_id,
             "alliance_name": alliance.get("alliance_name") or alliance.get("name"),
@@ -87,7 +105,7 @@ def _run_forcepull(guild_id: str):
 
         # This function must be the SAME one cron/startup uses.
         run_alliance_sync(payload)
-        record_pull_history(alliance_id, pull_timestamp, True, source="forcepull")
+        record_pull_history(alliance_id, pull_timestamp, True, source=source)
 
         log.info("Forcepull completed for guild %s", guild_id)
 
@@ -98,7 +116,7 @@ def _run_forcepull(guild_id: str):
                 alliance_id,
                 pull_timestamp or scrape_timestamp(),
                 False,
-                source="forcepull",
+                source="test" if alliance and is_test_mode_enabled(alliance) else "forcepull",
             )
         
 def handle_forcepull(payload: dict):

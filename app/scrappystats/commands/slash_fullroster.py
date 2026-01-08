@@ -46,8 +46,12 @@ def full_roster_messages(alliance_state: dict) -> List[str]:
         return value
 
     max_length = 1900
-    header = f"{'Name':<20} {'Rank':<10} {'Lvl':>3}  {'Last Join':<10} {'Orig Join':<10}"
-    separator = "-" * 60
+    date_width = 18
+    header = (
+        f"{'Name':<20} {'Rank':<10} {'Lvl':>3}  "
+        f"{'Last Join':<{date_width}} {'Orig Join':<{date_width}}"
+    )
+    separator = "-" * len(header)
 
     def build_intro(first: bool) -> List[str]:
         title = "📋 Full Roster" if first else "📋 Full Roster (cont.)"
@@ -60,7 +64,10 @@ def full_roster_messages(alliance_state: dict) -> List[str]:
         lvl = m.level if isinstance(m.level, int) else int(m.level or 0)
         orig_join = format_join_date(m.original_join_date)
         last_join = format_join_date(m.last_join_date)
-        line = f"{m.name:<20} {m.rank:<10} {lvl:>3}  {last_join:<10} {orig_join:<10}"
+        line = (
+            f"{m.name:<20} {m.rank:<10} {lvl:>3}  "
+            f"{last_join:<{date_width}} {orig_join:<{date_width}}"
+        )
         tentative = "\n".join(current + [line, "```"])
         if len(tentative) > max_length and len(current) > 4:
             chunks.append("\n".join(current + ["```"]))

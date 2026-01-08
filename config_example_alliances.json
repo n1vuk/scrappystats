@@ -5,9 +5,16 @@
   "webhook": "https://discord.com/api/webhooks/FALLBACK_WEBHOOK_HERE",
   "alliances": [
     {
+      "id": "1",
+      "name": "Test Alliance",
+      "webhook": "https://discord.com/api/webhooks/ALLIANCE_WEBHOOK_HERE",
+      "test_mode": true
+    },
+    {
       "id": "324544715",
       "name": "Spawn of Venom",
-      "webhook": "https://discord.com/api/webhooks/ALLIANCE_WEBHOOK_HERE"
+      "webhook": "https://discord.com/api/webhooks/ALLIANCE_WEBHOOK_HERE",
+      "test_mode": false
     }
   ],
   "guilds": [

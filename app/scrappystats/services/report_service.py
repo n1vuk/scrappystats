@@ -19,6 +19,7 @@ from .report_common import (
     make_table,
     load_snapshot_at_or_before,
 )
+from ..models.member import Member
 from ..webhook.sender import post_webhook_message
 
 log = logging.getLogger(__name__)
@@ -30,6 +31,14 @@ REPORT_TITLES = {
     "daily":   "📊 **Daily Service Record**",
     "weekly":  "📈 **Weekly Service Record**",
 }
+RANK_DISPLAY_ORDER = [
+    "Admiral",
+    "Commodore",
+    "Premier",
+    "Operative",
+    "Agent",
+]
+RANK_INDEX = {name: i for i, name in enumerate(RANK_DISPLAY_ORDER)}
 
 
 def build_service_reports(
@@ -77,10 +86,20 @@ def build_service_reports(
             previous = current 
         deltas = compute_deltas(current, previous)
 
+        members_raw = state.get("members", {}) or {}
+        member_meta_by_name = {}
+        for data in members_raw.values():
+            member = Member.from_json(data)
+            member_meta_by_name[member.name] = {
+                "rank": member.rank,
+                "level": member.level,
+            }
+
         message = format_service_report(
             alliance_name=alliance_name,
             report_type=report_type,
             deltas=deltas,
+            member_meta_by_name=member_meta_by_name,
         )
         if not message:
             continue
@@ -132,21 +151,41 @@ def format_service_report(
     alliance_name: str,
     report_type: ReportType,
     deltas: dict,
+    member_meta_by_name: dict[str, dict],
 ) -> str | None:
     rows = []
-    for member_name in sorted(deltas.keys()):
-        delta = deltas[member_name]
-        helps = delta.get("helps", 0)
-        rss = delta.get("rss", 0)
-        iso = delta.get("iso", 0)
+    for member_name, delta in deltas.items():
+        helps = delta.get("helps", 0) or 0
+        rss = delta.get("rss", 0) or 0
+        iso = delta.get("iso", 0) or 0
         if helps == 0 and rss == 0 and iso == 0:
             continue
-        rows.append([member_name, helps, rss, iso])
+        meta = member_meta_by_name.get(member_name, {})
+        rank = meta.get("rank", "")
+        level = meta.get("level", "")
+        rank_idx = RANK_INDEX.get(rank, len(RANK_DISPLAY_ORDER))
+        level_value = int(level) if isinstance(level, int) or str(level).isdigit() else level or "-"
+        rows.append(
+            {
+                "name": member_name,
+                "rank": rank,
+                "level": level_value,
+                "helps": helps,
+                "rss": rss,
+                "iso": iso,
+                "rank_idx": rank_idx,
+            }
+        )
 
     if not rows:
         return None
 
-    table = make_table(["Member", "Helps", "RSS", "ISO"], rows)
+    rows.sort(key=lambda row: (row["rank_idx"], -float(row["helps"]), row["name"].lower()))
+    table_rows = [
+        [row["name"], row["rank"], row["level"], row["helps"], row["rss"], row["iso"]]
+        for row in rows
+    ]
+    table = make_table(["Member", "Rank", "Lvl", "Helps", "RSS", "ISO"], table_rows)
 
     lines = [
         REPORT_TITLES[report_type],

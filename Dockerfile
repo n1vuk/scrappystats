@@ -14,6 +14,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ /app/
 COPY supervisord.conf /app/supervisord.conf
+COPY crontab /app/crontab
+COPY crontab_test /app/crontab_test
 COPY crontab /etc/cron.d/scrappystats-cron
 
 RUN chmod 0644 /etc/cron.d/scrappystats-cron && \
