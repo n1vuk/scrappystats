@@ -24,9 +24,14 @@ from scrappystats.config import load_config, get_guild_alliances
 
 from ..services.fetch import fetch_alliance_roster, scrape_timestamp
 from ..services.sync import run_alliance_sync
-from ..services.test_mode import is_test_mode_enabled, load_test_roster
+from ..services.test_mode import (
+    format_test_mode_webhook,
+    is_test_mode_enabled,
+    load_test_roster,
+)
 from ..services.service_record import add_service_event
 from ..utils import load_json, save_json, PENDING_RENAMES_DIR
+from ..webhook.sender import post_webhook_message
 
 
 log = logging.getLogger("scrappystats.forcepull")
@@ -85,13 +90,17 @@ def _run_forcepull(guild_id: str):
                 record_pull_history(alliance_id, pull_timestamp, False, source="test")
                 log.error("Forcepull failed: no test data available for alliance %s", alliance_id)
                 return
-            roster, pull_timestamp = test_payload
+            roster, pull_timestamp, test_message, test_file = test_payload
             source = "test"
             log.info(
                 "Forcepull test mode using %s members at %s for alliance %s.",
                 len(roster),
                 pull_timestamp,
                 alliance_id,
+            )
+            post_webhook_message(
+                format_test_mode_webhook(test_file, test_message),
+                alliance_id=alliance_id,
             )
         else:
             roster = fetch_alliance_roster(alliance_id, debug=debug)

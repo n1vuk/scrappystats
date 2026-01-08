@@ -140,3 +140,8 @@
 ## through 3.0.0 stabalizing refactor
 
 ## v3.1 completed stabilizing refactor
+
+## v3.2 added test mode
+
+## v3.2a
+- Fix: Added test mode webhook msg's when each file is processed.  added example test files.

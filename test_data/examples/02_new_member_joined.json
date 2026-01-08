@@ -1,0 +1,42 @@
+{
+  "msg": "New member joined test",
+  "scrape_timestamp": "2024-01-02T00:00:00Z",
+  "scraped_members": [
+    {
+      "name": "Cadet Nova",
+      "rank": "Recruit",
+      "level": 12,
+      "helps": 25,
+      "rss": 1200,
+      "iso": 10,
+      "join_date": "2023-12-15"
+    },
+    {
+      "name": "Lieutenant Hale",
+      "rank": "Member",
+      "level": 18,
+      "helps": 40,
+      "rss": 2200,
+      "iso": 18,
+      "join_date": "2023-12-20"
+    },
+    {
+      "name": "Commander Voss",
+      "rank": "Officer",
+      "level": 24,
+      "helps": 55,
+      "rss": 3100,
+      "iso": 24,
+      "join_date": "2023-12-28"
+    },
+    {
+      "name": "Ensign Rhea",
+      "rank": "Recruit",
+      "level": 10,
+      "helps": 12,
+      "rss": 800,
+      "iso": 6,
+      "join_date": "2024-01-02"
+    }
+  ]
+}

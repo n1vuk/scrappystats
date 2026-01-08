@@ -18,7 +18,7 @@ def is_test_mode_enabled(alliance: dict) -> bool:
     return enabled
 
 
-def load_test_roster(alliance_id: str) -> tuple[list[dict], str] | None:
+def load_test_roster(alliance_id: str) -> tuple[list[dict], str, str | None, str] | None:
     if str(alliance_id) != "1":
         return None
 
@@ -53,7 +53,7 @@ def load_test_roster(alliance_id: str) -> tuple[list[dict], str] | None:
     except ValueError as exc:
         log.warning("Invalid test data file %s: %s", next_file, exc)
         return None
-    return roster, ts
+    return roster, ts, _extract_message(data), next_file.name
 
 
 def _sorted_test_files() -> list[Path]:
@@ -91,3 +91,20 @@ def _extract_roster_and_timestamp(data: object) -> tuple[list[dict], str]:
     if isinstance(data, list):
         return data, timestamp
     raise ValueError("Test data must be a list or dict with roster data.")
+
+
+def _extract_message(data: object) -> str | None:
+    if isinstance(data, dict):
+        message = data.get("msg")
+        if message is not None:
+            return str(message)
+    return None
+
+
+def format_test_mode_webhook(file_name: str, message: str | None) -> str:
+    lines = [
+        "🧪 **Test mode roster pull**",
+        f"File: `{file_name}`",
+        f"Message: {message or '(none)'}",
+    ]
+    return "\n".join(lines)
