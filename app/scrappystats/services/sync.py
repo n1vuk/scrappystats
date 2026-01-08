@@ -109,6 +109,16 @@ def _member_join_date(member: Member) -> str:
     return ""
 
 
+def _combine_join_date(join_date: str | None, scrape_timestamp: str) -> str | None:
+    if not join_date:
+        return None
+    if "T" in scrape_timestamp:
+        time_part = scrape_timestamp.split("T", 1)[1]
+    else:
+        time_part = "00:00:00Z"
+    return f"{join_date}T{time_part}"
+
+
 def _within_percent(old: float, new: float, threshold: float) -> bool:
     if old == 0:
         return new == 0
@@ -308,7 +318,15 @@ def sync_alliance(alliance_cfg: dict) -> None:
             m.name = scraped["name"]
             m.rank = scraped.get("rank", m.rank)
             m.level = scraped.get("level", m.level)
-            # last_join_date remains unchanged here; we only bump it on explicit rejoin logic
+            join_date = scraped.get("join_date")
+            combined_join = _combine_join_date(join_date, scrape_timestamp)
+            if combined_join and not m.original_join_date:
+                m.original_join_date = combined_join
+            if combined_join and (
+                not m.last_join_date
+                or str(m.last_join_date).split("T", 1)[0] != join_date
+            ):
+                m.last_join_date = combined_join
             curr_members[match_uuid] = m
         else:
             # New member in v2: initialize from scrape
