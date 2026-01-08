@@ -1,0 +1,12 @@
+{
+  "admin_webhook": "https://discord.com/api/webhooks/1446336253527330942/VABNya5JIjbqkMRMhF4gjaK9sNPhcBDZQc4dg_7g7aaSySjQrQSCwltAhqqACHMe92uG",
+  "admins": ["996477152608399400"],
+  "debug": true,
+  "alliances": [
+    {
+      "id": "324544715",
+      "name": "Spawn of Venom",
+      "webhook": "https://discord.com/api/webhooks/1446336592863035547/eiWDTFisIJCUOHXrXsZxpMdkv-xY7QcTEiIMQrF7Z7EOMkF-rSuWYQwpkhV5FBVn75Ok"
+    }
+  ]
+}
