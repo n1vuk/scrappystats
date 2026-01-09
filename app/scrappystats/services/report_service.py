@@ -172,12 +172,14 @@ def format_service_report(
 ) -> str | None:
     rows = []
     for member_name, delta in deltas.items():
-        helps = delta.get("helps", 0) or 0
-        rss = delta.get("rss", 0) or 0
-        iso = delta.get("iso", 0) or 0
+        meta = member_meta_by_name.get(member_name)
+        if not meta:
+            continue
+        helps = max(delta.get("helps", 0) or 0, 0)
+        rss = max(delta.get("rss", 0) or 0, 0)
+        iso = max(delta.get("iso", 0) or 0, 0)
         if helps == 0 and rss == 0 and iso == 0:
             continue
-        meta = member_meta_by_name.get(member_name, {})
         rank = meta.get("rank", "")
         level = meta.get("level", "")
         rank_idx = RANK_INDEX.get(rank, len(RANK_DISPLAY_ORDER))
@@ -202,7 +204,11 @@ def format_service_report(
         [row["name"], row["rank"], row["level"], row["helps"], row["rss"], row["iso"]]
         for row in rows
     ]
-    table = make_table(["Member", "Rank", "Lvl", "Helps", "RSS", "ISO"], table_rows)
+    table = make_table(
+        ["Member", "Rank", "Lvl", "Helps", "RSS", "ISO"],
+        table_rows,
+        min_widths=[20, 10, 3, 5, 7, 5],
+    )
 
     lines = [
         REPORT_TITLES[report_type],
