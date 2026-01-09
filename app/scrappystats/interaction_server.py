@@ -25,6 +25,7 @@ configure_logging()
 
 app = FastAPI()
 START_TIME = utcnow()
+INTERIM_PERIOD_OPTIONS = ("daily", "weekly")
 
 ## Check for valid config file and fail if one is not found
 load_config(fatal=True)
@@ -75,8 +76,8 @@ COMMANDS = [
                 "options": [
                     {
                         "type": 3,
-                        "name": "player",
-                        "description": "Exact player name to filter.",
+                        "name": "period",
+                        "description": "Report period to run.",
                         "required": False,
                         "autocomplete": True,
                     }
@@ -244,6 +245,17 @@ def _find_focused_option(options: list[dict]) -> tuple[dict | None, str | None]:
     return None, None
 
 
+def _autocomplete_period_options(query: str, options: tuple[str, ...]) -> list[dict]:
+    if not query:
+        return [{"name": option, "value": option} for option in options]
+    needle = query.lower()
+    return [
+        {"name": option, "value": option}
+        for option in options
+        if needle in option.lower()
+    ]
+
+
 # ─────────────────────────────────────────────
 # Interaction endpoint
 # ─────────────────────────────────────────────
@@ -307,16 +319,19 @@ async def interactions(request: Request):
         options = data.get("options") or []
         focused, sub_name = _find_focused_option(options)
         choices = []
-        if focused and focused.get("name") == "player":
-            if sub_name in {
-                "servicerecord",
-                "namechanges",
-                "interimreport",
-                "dailyreport",
-                "weeklyreport",
-            }:
-                query = focused.get("value") or ""
-                choices = handle_player_autocomplete(payload, query)
+        if focused:
+            option_name = focused.get("name")
+            query = focused.get("value") or ""
+            if option_name == "player":
+                if sub_name in {
+                    "servicerecord",
+                    "namechanges",
+                    "dailyreport",
+                    "weeklyreport",
+                }:
+                    choices = handle_player_autocomplete(payload, query)
+            elif option_name == "period" and sub_name == "interimreport":
+                choices = _autocomplete_period_options(query, INTERIM_PERIOD_OPTIONS)
         return JSONResponse({"type": 8, "data": {"choices": choices}})
 
     return JSONResponse({"error": "Unsupported interaction type"}, status_code=400)
