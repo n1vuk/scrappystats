@@ -61,6 +61,33 @@ def load_snapshot_at_or_before(alliance_id: str, target_dt: datetime) -> dict:
 
     return load_json(best_path, {})
 
+
+def load_snapshot_at_or_after(alliance_id: str, target_dt: datetime) -> dict:
+    """
+    Load the earliest snapshot at or after the target timestamp.
+    """
+    history_dir = HISTORY_DIR / alliance_id
+    if not history_dir.exists():
+        return {}
+
+    if target_dt.tzinfo is None:
+        target_dt = target_dt.replace(tzinfo=timezone.utc)
+
+    best_path: Path | None = None
+    best_ts: datetime | None = None
+    for file in history_dir.glob("*.json"):
+        ts = _parse_snapshot_ts(file)
+        if ts is None or ts < target_dt:
+            continue
+        if best_ts is None or ts < best_ts:
+            best_ts = ts
+            best_path = file
+
+    if best_path is None:
+        return {}
+
+    return load_json(best_path, {})
+
 def compute_deltas(cur: dict, prev: dict):
     deltas = {}
     for name, pdata in cur.items():

@@ -41,6 +41,7 @@ def record_pull_history(
     timestamp: Optional[str],
     success: bool,
     source: Optional[str] = None,
+    data_changed: Optional[bool] = None,
 ) -> None:
     """Record a pull attempt for the given alliance."""
     state = load_state(alliance_id)
@@ -51,6 +52,8 @@ def record_pull_history(
     }
     if source:
         entry["source"] = source
+    if data_changed is not None:
+        entry["data_changed"] = bool(data_changed)
     history.append(entry)
     state["pull_history"] = history[-20:]
     save_state(alliance_id, state)

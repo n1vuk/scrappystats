@@ -16,6 +16,7 @@ from .commands.interactions import (
     handle_rename_review_slash,
     handle_manual_rename_slash,
     handle_pull_history_slash,
+    handle_player_autocomplete,
 )
 from scrappystats.config import load_config
 
@@ -39,9 +40,48 @@ COMMANDS = [
         "name": "scrappystats",
         "description": SCRAPPYSTATS_DESCRIPTION,
         "options": [
-            {"type": 1, "name": "dailyreport", "description": "Show the daily alliance report."},
-            {"type": 1, "name": "weeklyreport", "description": "Show the weekly alliance report."},
-            {"type": 1, "name": "interimreport", "description": "Show the interim alliance report."},
+            {
+                "type": 1,
+                "name": "dailyreport",
+                "description": "Show the daily alliance report.",
+                "options": [
+                    {
+                        "type": 3,
+                        "name": "player",
+                        "description": "Exact player name to filter.",
+                        "required": False,
+                        "autocomplete": True,
+                    }
+                ],
+            },
+            {
+                "type": 1,
+                "name": "weeklyreport",
+                "description": "Show the weekly alliance report.",
+                "options": [
+                    {
+                        "type": 3,
+                        "name": "player",
+                        "description": "Exact player name to filter.",
+                        "required": False,
+                        "autocomplete": True,
+                    }
+                ],
+            },
+            {
+                "type": 1,
+                "name": "interimreport",
+                "description": "Show the interim alliance report.",
+                "options": [
+                    {
+                        "type": 3,
+                        "name": "player",
+                        "description": "Exact player name to filter.",
+                        "required": False,
+                        "autocomplete": True,
+                    }
+                ],
+            },
             {"type": 1, "name": "forcepull", "description": "Force Scrappy to fetch new data."},
             {"type": 1, "name": "pullhistory", "description": "Show the last 5 data pulls."},
             {"type": 1, "name": "fullroster", "description": "Show full roster with join dates."},
@@ -55,6 +95,7 @@ COMMANDS = [
                         "name": "player",
                         "description": "Exact player name to look up.",
                         "required": True,
+                        "autocomplete": True,
                     }
                 ],
             },
@@ -68,6 +109,7 @@ COMMANDS = [
                         "name": "player",
                         "description": "Exact player name to filter.",
                         "required": False,
+                        "autocomplete": True,
                     }
                 ],
             },
@@ -190,6 +232,18 @@ def dispatch_command(sub_name: str, payload: dict):
     return handler(payload)
 
 
+def _find_focused_option(options: list[dict]) -> tuple[dict | None, str | None]:
+    for opt in options:
+        if opt.get("focused"):
+            return opt, None
+    for opt in options:
+        nested = opt.get("options") or []
+        focused, sub_name = _find_focused_option(nested)
+        if focused:
+            return focused, sub_name or opt.get("name")
+    return None, None
+
+
 # ─────────────────────────────────────────────
 # Interaction endpoint
 # ─────────────────────────────────────────────
@@ -243,5 +297,26 @@ async def interactions(request: Request):
                     True,
                 )
             )
+
+    # ---- Autocomplete ----
+    if t == 4:
+        data = payload.get("data", {})
+        name = data.get("name")
+        if name != "scrappystats":
+            return JSONResponse({"type": 8, "data": {"choices": []}})
+        options = data.get("options") or []
+        focused, sub_name = _find_focused_option(options)
+        choices = []
+        if focused and focused.get("name") == "player":
+            if sub_name in {
+                "servicerecord",
+                "namechanges",
+                "interimreport",
+                "dailyreport",
+                "weeklyreport",
+            }:
+                query = focused.get("value") or ""
+                choices = handle_player_autocomplete(payload, query)
+        return JSONResponse({"type": 8, "data": {"choices": choices}})
 
     return JSONResponse({"error": "Unsupported interaction type"}, status_code=400)

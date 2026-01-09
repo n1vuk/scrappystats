@@ -3,12 +3,33 @@
 
 Formats the service history for a single Member.
 """
-from ..models.member import Member
+from datetime import date, datetime, timezone
 from typing import Literal
+
+from ..models.member import Member
 from ..services.report_service import build_service_reports
 from ..log import log  # or wherever log lives
 from ..discord_utils import interaction_response
 from ..webhook.sender import post_webhook_message
+
+def _format_timestamp(raw: str | None) -> str:
+    if not raw:
+        return "Unknown"
+    value = str(raw)
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.astimezone(timezone.utc)
+        return parsed.strftime("%b %d, %Y %H:%M UTC")
+    except ValueError:
+        pass
+    try:
+        parsed_date = date.fromisoformat(value)
+        return parsed_date.strftime("%b %d, %Y")
+    except ValueError:
+        return value
+
 
 def service_record_command(member: Member) -> str:
     """Return a formatted service record for the given Member instance."""
@@ -16,8 +37,8 @@ def service_record_command(member: Member) -> str:
     lines.append(f"📘 Service Record: {member.name}")
     lines.append(f"Current Rank: {member.rank}")
     lines.append(f"Current Level: {member.level}")
-    lines.append(f"Original Join: {member.original_join_date}")
-    lines.append(f"Last Join: {member.last_join_date}")
+    lines.append(f"Original Join: {_format_timestamp(member.original_join_date)}")
+    lines.append(f"Last Join: {_format_timestamp(member.last_join_date)}")
     if getattr(member, "previous_names", None):
         lines.append(f"Previous Names: {', '.join(member.previous_names)}")
     lines.append("")
@@ -33,7 +54,7 @@ def service_record_command(member: Member) -> str:
     lines.append("Events:")
     for ev in events:
         etype = ev.get("type", "")
-        ts = ev.get("timestamp", "")
+        ts = _format_timestamp(ev.get("timestamp"))
         desc = None
 
         if etype == "join":
@@ -86,6 +107,20 @@ def _resolve_report_period(payload: dict, fallback: ReportPeriod) -> ReportPerio
     return fallback
 
 
+def _get_subcommand_option(payload: dict, option_name: str):
+    data = payload.get("data", {})
+    options = data.get("options") or []
+    if options:
+        sub = options[0]
+        for opt in sub.get("options") or []:
+            if opt.get("name") == option_name:
+                return opt.get("value")
+    for opt in options:
+        if opt.get("name") == option_name:
+            return opt.get("value")
+    return None
+
+
 def handle_report_slash(payload: dict, period: ReportPeriod):
     """
     Thin adapter for slash commands.
@@ -93,12 +128,17 @@ def handle_report_slash(payload: dict, period: ReportPeriod):
     """
     guild_id = payload.get("guild_id")
     resolved_period = _resolve_report_period(payload, period)
+    player_name = _get_subcommand_option(payload, "player")
     log.info(
         "Slash report requested: guild=%s period=%s",
         guild_id,
         resolved_period,
     )
-    reports = build_service_reports(resolved_period, guild_id=guild_id)
+    reports = build_service_reports(
+        resolved_period,
+        guild_id=guild_id,
+        player_name=player_name,
+    )
     for alliance_id, message in reports:
         post_webhook_message(message, alliance_id=alliance_id)
     if not reports:

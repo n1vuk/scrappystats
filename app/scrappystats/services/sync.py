@@ -268,7 +268,7 @@ def _reconcile_name_changes(
     return pending_events
 
 
-def sync_alliance(alliance_cfg: dict) -> None:
+def sync_alliance(alliance_cfg: dict) -> bool:
     """Run a single sync for one alliance.
 
     alliance_cfg is expected to contain at least:
@@ -333,6 +333,8 @@ def sync_alliance(alliance_cfg: dict) -> None:
             m_json = initialize_member(scraped, scrape_timestamp)
             m = Member.from_json(m_json)
             curr_members[m.uuid] = m
+
+    data_changed = service_state != prev_service_state
 
     pending_rename_events = _reconcile_name_changes(
         prev_members,
@@ -501,6 +503,7 @@ def sync_alliance(alliance_cfg: dict) -> None:
         report_state,
         history_snapshot,
     )
+    return data_changed
 
 # def run_alliance_sync(alliance: dict) -> None:
 #     """
@@ -510,7 +513,7 @@ def sync_alliance(alliance_cfg: dict) -> None:
 #     cfg = build_alliance_cfg(alliance)
 #     run_alliance_sync(alliance)
 
-def run_alliance_sync(alliance: dict) -> None:
+def run_alliance_sync(alliance: dict) -> bool:
     """
     Canonical orchestration entry point.
 
@@ -534,7 +537,7 @@ def run_alliance_sync(alliance: dict) -> None:
         "scrape_timestamp": scrape_timestamp,
     }
 
-    sync_alliance(cfg)
+    return sync_alliance(cfg)
     
 def main():
     # Simple test harness; replace with real config/cron wiring.

@@ -12,12 +12,14 @@ from typing import Literal
 
 from scrappystats.config import load_config, list_alliances, get_guild_alliances
 from scrappystats.utils import HISTORY_DIR, save_json
+from scrappystats.storage.state import load_state
 
 from .report_common import (
     load_state_and_baseline,
     compute_deltas,
     make_table,
     load_snapshot_at_or_before,
+    load_snapshot_at_or_after,
 )
 from ..models.member import Member
 from ..webhook.sender import post_webhook_message
@@ -45,6 +47,7 @@ def build_service_reports(
     report_type: ReportType,
     *,
     guild_id: str | None = None,
+    player_name: str | None = None,
 ) -> list[tuple[str, str]]:
     """
     Build report messages for each alliance.
@@ -75,6 +78,8 @@ def build_service_reports(
 
         state, baseline = load_state_and_baseline(alliance_id, report_type)
         start_snapshot = load_snapshot_at_or_before(alliance_id, start_dt)
+        if report_type == "interim" and not start_snapshot:
+            start_snapshot = load_snapshot_at_or_after(alliance_id, start_dt)
         end_snapshot = load_snapshot_at_or_before(alliance_id, end_dt)
         current = end_snapshot or state
         
@@ -82,17 +87,29 @@ def build_service_reports(
             previous = start_snapshot or current
         else:
             previous = start_snapshot or baseline
-        if report_type == "interim" and start_snapshot is None:
-            previous = current 
         deltas = compute_deltas(current, previous)
 
-        members_raw = state.get("members", {}) or {}
+        member_state = load_state(alliance_id)
+        members_raw = member_state.get("members", {}) or {}
         member_meta_by_name = {}
         for data in members_raw.values():
             member = Member.from_json(data)
             member_meta_by_name[member.name] = {
                 "rank": member.rank,
                 "level": member.level,
+            }
+
+        if player_name:
+            filtered = {
+                name: delta
+                for name, delta in deltas.items()
+                if name.lower() == player_name.lower()
+            }
+            deltas = filtered
+            member_meta_by_name = {
+                name: meta
+                for name, meta in member_meta_by_name.items()
+                if name.lower() == player_name.lower()
             }
 
         message = format_service_report(

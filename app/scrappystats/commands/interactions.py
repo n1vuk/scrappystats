@@ -64,6 +64,25 @@ def _resolve_alliance(config: dict, guild_id: str) -> Optional[dict]:
 
     return None
 
+
+def handle_player_autocomplete(payload: dict, query: str) -> list[dict]:
+    guild_id = payload.get("guild_id") or "default"
+    alliance = _resolve_alliance(load_config(), guild_id)
+    if not alliance:
+        return []
+    state = load_state(alliance.get("id", guild_id))
+    members_raw = (state.get("members") or {}).values()
+    names = []
+    for data in members_raw:
+        member = Member.from_json(data)
+        if member.name:
+            names.append(member.name)
+    names = sorted(set(names), key=str.lower)
+    if query:
+        needle = query.lower()
+        names = [name for name in names if needle in name.lower()]
+    return [{"name": name, "value": name} for name in names[:25]]
+
 def _run_forcepull(guild_id: str):
     alliance_id = None
     pull_timestamp = None
@@ -508,5 +527,11 @@ def handle_pull_history_slash(payload: dict) -> dict:
         status = "✅ Success" if entry.get("success") else "❌ Failed"
         source = entry.get("source")
         suffix = f" ({source})" if source else ""
-        lines.append(f"- {ts} — {status}{suffix}")
+        data_changed = entry.get("data_changed")
+        data_suffix = ""
+        if data_changed is True:
+            data_suffix = " • data changed"
+        elif data_changed is False:
+            data_suffix = " • no data change"
+        lines.append(f"- {ts} — {status}{suffix}{data_suffix}")
     return interaction_response("\n".join(lines), ephemeral=True)

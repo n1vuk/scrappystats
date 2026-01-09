@@ -71,8 +71,14 @@ def main() -> int:
                     log.info("Saved raw JSON to %s", path)
                 except Exception:
                     log.exception("Failed to save raw JSON for alliance %s", alliance_id)
-            run_alliance_sync(payload)
-            record_pull_history(alliance_id, payload["scrape_timestamp"], True, source=record_source)
+            data_changed = run_alliance_sync(payload)
+            record_pull_history(
+                alliance_id,
+                payload["scrape_timestamp"],
+                True,
+                source=record_source,
+                data_changed=data_changed,
+            )
         except Exception:
             log.exception("Failed to fetch/sync alliance %s", alliance_id)
             record_pull_history(alliance_id, timestamp, False, source=record_source)
