@@ -128,12 +128,11 @@ def make_table(headers, rows):
         return text.rjust(widths[idx]) if numeric_cols[idx] else text.ljust(widths[idx])
 
     def fmt_row(row):
-        return " | ".join(fmt_cell(cell, i) for i, cell in enumerate(row))
+        return "  ".join(fmt_cell(cell, i) for i, cell in enumerate(row))
 
-    lines = [
-        fmt_row(headers),
-        "-+-".join("-" * w for w in widths),
-    ]
+    header_line = fmt_row(headers)
+    separator = "-" * len(header_line)
+    lines = [header_line, separator]
 
     for row in rows:
         lines.append(fmt_row(row))
