@@ -145,3 +145,6 @@
 
 ## v3.2a
 - Fix: Added test mode webhook msg's when each file is processed.  added example test files.
+
+## v3.3
+- Fix: Cron Jobs not running
