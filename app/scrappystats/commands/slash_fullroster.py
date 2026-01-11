@@ -22,7 +22,12 @@ def _deserialize_members(members_raw: Dict[str, dict]):
         members.append(Member.from_json(data))
     return members
 
-def full_roster_messages(alliance_state: dict) -> List[str]:
+def full_roster_messages(
+    alliance_state: dict,
+    *,
+    name_overrides: dict | None = None,
+    active_names: set[str] | None = None,
+) -> List[str]:
     """Build paginated roster messages from the v2 alliance_state dict.
 
     alliance_state is expected to be the dict returned by
@@ -30,11 +35,15 @@ def full_roster_messages(alliance_state: dict) -> List[str]:
     """
     members_raw = alliance_state.get("members", {}) or {}
     members = _deserialize_members(members_raw)
+    overrides = name_overrides or {}
+    if active_names is not None:
+        members = [member for member in members if member.name in active_names]
 
     # Sort by rank (highest first), then level desc, then name
     def sort_key(m: Member):
         rank_idx = RANK_INDEX.get(m.rank, len(RANK_DISPLAY_ORDER))
-        return (rank_idx, -int(m.level or 0), m.name.lower())
+        display_name = overrides.get(m.uuid, m.name)
+        return (rank_idx, -int(m.level or 0), display_name.lower())
 
     members.sort(key=sort_key)
 
@@ -48,7 +57,7 @@ def full_roster_messages(alliance_state: dict) -> List[str]:
     max_length = 1900
     date_width = 18
     header = (
-        f"{'Name':<20} {'Rank':<10} {'Lvl':>3}  "
+        f"{'Name':<20} {'Rank':<10} {'Lvl':>3} {'Power':>8}  "
         f"{'Last Join':<{date_width}} {'Orig Join':<{date_width}}"
     )
     separator = "-" * len(header)
@@ -64,8 +73,10 @@ def full_roster_messages(alliance_state: dict) -> List[str]:
         lvl = m.level if isinstance(m.level, int) else int(m.level or 0)
         orig_join = format_join_date(m.original_join_date)
         last_join = format_join_date(m.last_join_date)
+        display_name = overrides.get(m.uuid, m.name)
+        power = m.power if isinstance(m.power, int) else int(m.power or 0)
         line = (
-            f"{m.name:<20} {m.rank:<10} {lvl:>3}  "
+            f"{display_name:<20} {m.rank:<10} {lvl:>3} {power:>8}  "
             f"{last_join:<{date_width}} {orig_join:<{date_width}}"
         )
         tentative = "\n".join(current + [line, "```"])

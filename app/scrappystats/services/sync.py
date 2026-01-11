@@ -318,6 +318,7 @@ def sync_alliance(alliance_cfg: dict) -> bool:
             m.name = scraped["name"]
             m.rank = scraped.get("rank", m.rank)
             m.level = scraped.get("level", m.level)
+            m.power = scraped.get("power", getattr(m, "power", 0)) or 0
             join_date = scraped.get("join_date")
             combined_join = _combine_join_date(join_date, scrape_timestamp)
             if combined_join and not m.original_join_date:

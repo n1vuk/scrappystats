@@ -58,6 +58,30 @@ def record_pull_history(
     state["pull_history"] = history[-20:]
     save_state(alliance_id, state)
 
+def get_guild_name_overrides(state: dict, guild_id: Optional[str]) -> dict:
+    if not guild_id:
+        return {}
+    overrides = state.get("name_overrides") or {}
+    return overrides.get(str(guild_id), {}) or {}
+
+
+def set_guild_name_override(
+    state: dict,
+    *,
+    guild_id: str,
+    member_uuid: str,
+    display_name: Optional[str],
+) -> None:
+    overrides = state.get("name_overrides") or {}
+    guild_key = str(guild_id)
+    guild_overrides = overrides.get(guild_key, {}) or {}
+    if display_name:
+        guild_overrides[member_uuid] = display_name
+    else:
+        guild_overrides.pop(member_uuid, None)
+    overrides[guild_key] = guild_overrides
+    state["name_overrides"] = overrides
+
 def initialize_member(scraped: dict, scrape_timestamp: str) -> dict:
     """Create an initial serialized Member for a newly-seen player.
 
@@ -83,5 +107,6 @@ def initialize_member(scraped: dict, scrape_timestamp: str) -> dict:
         rank=scraped.get("rank", "Unknown"),
         original_join_date=combined_ts,
         last_join_date=combined_ts,
+        power=scraped.get("power", 0) or 0,
     )
     return m.to_json()

@@ -12,7 +12,7 @@ from typing import Literal
 
 from scrappystats.config import load_config, list_alliances, get_guild_alliances
 from scrappystats.utils import HISTORY_DIR, save_json
-from scrappystats.storage.state import load_state
+from scrappystats.storage.state import load_state, get_guild_name_overrides
 
 from .report_common import (
     load_state_and_baseline,
@@ -88,16 +88,30 @@ def build_service_reports(
         else:
             previous = start_snapshot or baseline
         deltas = compute_deltas(current, previous)
+        active_names = set(current.keys())
 
         member_state = load_state(alliance_id)
         members_raw = member_state.get("members", {}) or {}
         member_meta_by_name = {}
+        member_uuid_by_name = {}
         for data in members_raw.values():
             member = Member.from_json(data)
+            if member.name not in active_names:
+                continue
             member_meta_by_name[member.name] = {
                 "rank": member.rank,
                 "level": member.level,
             }
+            member_uuid_by_name[member.name] = member.uuid
+
+        guild_overrides = get_guild_name_overrides(member_state, guild_id)
+        if guild_overrides:
+            deltas, member_meta_by_name = _apply_guild_name_overrides(
+                deltas,
+                member_meta_by_name,
+                member_uuid_by_name,
+                guild_overrides,
+            )
 
         if player_name:
             filtered = {
@@ -111,6 +125,8 @@ def build_service_reports(
                 for name, meta in member_meta_by_name.items()
                 if name.lower() == player_name.lower()
             }
+        else:
+            deltas = {name: delta for name, delta in deltas.items() if name in active_names}
 
         message = format_service_report(
             alliance_name=alliance_name,
@@ -125,6 +141,30 @@ def build_service_reports(
 
     return reports
 
+
+def _apply_guild_name_overrides(
+    deltas: dict,
+    member_meta_by_name: dict[str, dict],
+    member_uuid_by_name: dict[str, str],
+    guild_overrides: dict,
+) -> tuple[dict, dict[str, dict]]:
+    if not guild_overrides:
+        return deltas, member_meta_by_name
+
+    updated_deltas: dict = {}
+    updated_meta: dict[str, dict] = {}
+
+    for name, delta in deltas.items():
+        member_uuid = member_uuid_by_name.get(name)
+        display_name = guild_overrides.get(member_uuid, name) if member_uuid else name
+        if display_name in updated_deltas:
+            display_name = name
+        updated_deltas[display_name] = delta
+        meta = member_meta_by_name.get(name)
+        if meta:
+            updated_meta[display_name] = meta
+
+    return updated_deltas, updated_meta
 
 def run_service_report(report_type: ReportType) -> None:
     """

@@ -19,7 +19,14 @@ BASE_URL = "https://stfc.pro/alliance/"
 def fetch_alliance_page(alliance_id: str) -> str:
     url = BASE_URL + alliance_id
     log.info("Fetching %s", url)
-    resp = requests.get(url, timeout=30)
+    resp = requests.get(
+        url,
+        timeout=30,
+        headers={
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
+    )
     resp.raise_for_status()
     return resp.text
 
@@ -119,6 +126,13 @@ def parse_roster(html: str) -> Dict[str, dict]:
         except Exception:
             level = 0
 
+        power_text = _cell_text(
+            tds,
+            headers,
+            ("power", "pwr"),
+        )
+        power = _parse_number(power_text) if power_text else 0
+
         helps_text = _cell_text(
             tds,
             headers,
@@ -160,6 +174,7 @@ def parse_roster(html: str) -> Dict[str, dict]:
             "name": name,
             "rank": role,
             "level": level,
+            "power": power,
             "helps": helps,
             "rss": rss,
             "iso": iso,

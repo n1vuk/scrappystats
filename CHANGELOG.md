@@ -1,3 +1,12 @@
+## 3.4
+- Add guild-scoped name overrides and apply them across roster, service record, and report outputs.
+- Expand forcepull to run the same sync path for all alliances configured for a guild (or all alliances when no guilds are defined).
+- Capture member power during roster fetches and surface it in full roster and service record outputs.
+- Add service record contribution summaries for totals since last join and 30/7/1-day windows.
+- Filter rosters and daily/weekly/interim reports to only include currently active members.
+- Prefer HTML responses during roster fetches and update cron entries to include the user field.
+- Reschedule weekly report cron to 13:00 on Sundays to avoid overlap with fetches.
+
 ## 2.0.5
 - Fix missing load_alliances causing startup failure
 - Ensure __version__ export exists
@@ -145,6 +154,11 @@
 
 ## v3.2a
 - Fix: Added test mode webhook msg's when each file is processed.  added example test files.
-
-## v3.3
-- Fix: Cron Jobs not running
+## Unreleased
+- Add guild-scoped name overrides and apply them across roster, service record, and report outputs.
+- Expand forcepull to run the same sync path for all alliances configured for a guild (or all alliances when no guilds are defined).
+- Capture member power during roster fetches and surface it in full roster and service record outputs.
+- Add service record contribution summaries for totals since last join and 30/7/1-day windows.
+- Filter rosters and daily/weekly/interim reports to only include currently active members.
+- Prefer HTML responses during roster fetches and update cron entries to include the user field.
+- Reschedule weekly report cron to 13:00 on Sundays to avoid overlap with fetches.

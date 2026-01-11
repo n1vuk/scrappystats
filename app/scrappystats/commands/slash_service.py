@@ -31,12 +31,24 @@ def _format_timestamp(raw: str | None) -> str:
         return value
 
 
-def service_record_command(member: Member) -> str:
+def service_record_command(
+    member: Member,
+    *,
+    power: int | str | None = None,
+    contributions_total: dict | None = None,
+    contributions_30: dict | None = None,
+    contributions_7: dict | None = None,
+    contributions_1: dict | None = None,
+) -> str:
     """Return a formatted service record for the given Member instance."""
     lines = []
     lines.append(f"📘 Service Record: {member.name}")
     lines.append(f"Current Rank: {member.rank}")
     lines.append(f"Current Level: {member.level}")
+    if power is None:
+        power = getattr(member, "power", 0)
+    power_value = power if isinstance(power, int) else int(power or 0)
+    lines.append(f"Power: {power_value}")
     lines.append(f"Original Join: {_format_timestamp(member.original_join_date)}")
     lines.append(f"Last Join: {_format_timestamp(member.last_join_date)}")
     if getattr(member, "previous_names", None):
@@ -46,6 +58,40 @@ def service_record_command(member: Member) -> str:
     events = list(getattr(member, "service_events", []) or [])
     if not events:
         lines.append("No recorded events yet.")
+
+    totals = contributions_total or {"helps": 0, "rss": 0, "iso": 0}
+    last_30 = contributions_30 or {"helps": 0, "rss": 0, "iso": 0}
+    last_7 = contributions_7 or {"helps": 0, "rss": 0, "iso": 0}
+    last_1 = contributions_1 or {"helps": 0, "rss": 0, "iso": 0}
+
+    lines.append("")
+    lines.append("Contributions:")
+    lines.append(
+        "Since last join: "
+        f"Helps {int(totals.get('helps', 0) or 0)}, "
+        f"RSS {int(totals.get('rss', 0) or 0)}, "
+        f"ISO {int(totals.get('iso', 0) or 0)}"
+    )
+    lines.append(
+        "Last 30 days: "
+        f"Helps {int(last_30.get('helps', 0) or 0)}, "
+        f"RSS {int(last_30.get('rss', 0) or 0)}, "
+        f"ISO {int(last_30.get('iso', 0) or 0)}"
+    )
+    lines.append(
+        "Last 7 days: "
+        f"Helps {int(last_7.get('helps', 0) or 0)}, "
+        f"RSS {int(last_7.get('rss', 0) or 0)}, "
+        f"ISO {int(last_7.get('iso', 0) or 0)}"
+    )
+    lines.append(
+        "Last day: "
+        f"Helps {int(last_1.get('helps', 0) or 0)}, "
+        f"RSS {int(last_1.get('rss', 0) or 0)}, "
+        f"ISO {int(last_1.get('iso', 0) or 0)}"
+    )
+
+    if not events:
         return "\n".join(lines)
 
     # Sort by timestamp if present

@@ -8,11 +8,18 @@ using the v2 state layer and slash command formatters.
 import logging
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 
 from pathlib import Path
 from typing import Optional
 
-from ..storage.state import load_state, record_pull_history, save_state
+from ..storage.state import (
+    load_state,
+    record_pull_history,
+    save_state,
+    get_guild_name_overrides,
+    set_guild_name_override,
+)
 from ..models.member import Member
 from .slash_fullroster import full_roster_messages
 from .slash_service import service_record_command
@@ -30,8 +37,14 @@ from ..services.test_mode import (
     load_test_roster,
 )
 from ..services.service_record import add_service_event
-from ..utils import load_json, save_json, PENDING_RENAMES_DIR
+from ..utils import (
+    load_json,
+    save_json,
+    state_path as report_state_path,
+    PENDING_RENAMES_DIR,
+)
 from ..webhook.sender import post_webhook_message
+from ..services.report_common import compute_deltas, load_snapshot_at_or_before
 
 
 log = logging.getLogger("scrappystats.forcepull")
@@ -65,18 +78,32 @@ def _resolve_alliance(config: dict, guild_id: str) -> Optional[dict]:
     return None
 
 
+def _resolve_alliances(config: dict, guild_id: str) -> list[dict]:
+    alliances = get_guild_alliances(config, guild_id)
+    if alliances:
+        return alliances
+
+    guilds = config.get("guilds") or []
+    if guilds:
+        return []
+
+    return config.get("alliances", []) or []
+
+
 def handle_player_autocomplete(payload: dict, query: str) -> list[dict]:
     guild_id = payload.get("guild_id") or "default"
     alliance = _resolve_alliance(load_config(), guild_id)
     if not alliance:
         return []
     state = load_state(alliance.get("id", guild_id))
+    overrides = get_guild_name_overrides(state, guild_id)
     members_raw = (state.get("members") or {}).values()
     names = []
     for data in members_raw:
         member = Member.from_json(data)
-        if member.name:
-            names.append(member.name)
+        display_name = overrides.get(member.uuid, member.name)
+        if display_name:
+            names.append(display_name)
     names = sorted(set(names), key=str.lower)
     if query:
         needle = query.lower()
@@ -86,66 +113,85 @@ def handle_player_autocomplete(payload: dict, query: str) -> list[dict]:
 def _run_forcepull(guild_id: str):
     alliance_id = None
     pull_timestamp = None
-    alliance = None
     try:
         config = load_config()
-        alliance = _resolve_alliance(config, guild_id)
-        if not alliance:
-            log.error("Forcepull failed for guild %s: no alliance configured", guild_id)
+        alliances = _resolve_alliances(config, guild_id)
+        if not alliances:
+            log.error("Forcepull failed for guild %s: no alliances configured", guild_id)
             return
-
-        alliance_id = alliance.get("id")
-        if not alliance_id:
-            log.error("Forcepull failed for guild %s: alliance missing id", guild_id)
-            return
-
-        log.info("Forcepull started for guild %s", guild_id)
 
         debug = bool(config.get("debug"))
         pull_timestamp = scrape_timestamp()
-        if is_test_mode_enabled(alliance):
-            test_payload = load_test_roster(alliance_id)
-            if not test_payload:
-                record_pull_history(alliance_id, pull_timestamp, False, source="test")
-                log.error("Forcepull failed: no test data available for alliance %s", alliance_id)
-                return
-            roster, pull_timestamp, test_message, test_file = test_payload
-            source = "test"
-            log.info(
-                "Forcepull test mode using %s members at %s for alliance %s.",
-                len(roster),
-                pull_timestamp,
-                alliance_id,
-            )
-            post_webhook_message(
-                format_test_mode_webhook(test_file, test_message),
-                alliance_id=alliance_id,
-            )
-        else:
-            roster = fetch_alliance_roster(alliance_id, debug=debug)
-            source = "forcepull"
-        payload = {
-            "id": alliance_id,
-            "alliance_name": alliance.get("alliance_name") or alliance.get("name"),
-            "scraped_members": roster,
-            "scrape_timestamp": pull_timestamp,
-        }
+        log.info("Forcepull started for guild %s (%s alliances)", guild_id, len(alliances))
 
-        # This function must be the SAME one cron/startup uses.
-        run_alliance_sync(payload)
-        record_pull_history(alliance_id, pull_timestamp, True, source=source)
+        for alliance in alliances:
+            alliance_id = alliance.get("id")
+            if not alliance_id:
+                log.error("Forcepull skipped for guild %s: alliance missing id", guild_id)
+                continue
+
+            try:
+                if is_test_mode_enabled(alliance):
+                    test_payload = load_test_roster(alliance_id)
+                    if not test_payload:
+                        record_pull_history(alliance_id, pull_timestamp, False, source="test")
+                        log.error(
+                            "Forcepull failed: no test data available for alliance %s",
+                            alliance_id,
+                        )
+                        continue
+                    roster, test_timestamp, test_message, test_file = test_payload
+                    source = "test"
+                    log.info(
+                        "Forcepull test mode using %s members at %s for alliance %s.",
+                        len(roster),
+                        test_timestamp,
+                        alliance_id,
+                    )
+                    post_webhook_message(
+                        format_test_mode_webhook(test_file, test_message),
+                        alliance_id=alliance_id,
+                    )
+                    payload = {
+                        "id": alliance_id,
+                        "alliance_name": alliance.get("alliance_name") or alliance.get("name"),
+                        "scraped_members": roster,
+                        "scrape_timestamp": test_timestamp,
+                    }
+                else:
+                    roster = fetch_alliance_roster(alliance_id, debug=debug)
+                    source = "forcepull"
+                    payload = {
+                        "id": alliance_id,
+                        "alliance_name": alliance.get("alliance_name") or alliance.get("name"),
+                        "scraped_members": roster,
+                        "scrape_timestamp": pull_timestamp,
+                    }
+
+                # This function must be the SAME one cron/startup uses.
+                data_changed = run_alliance_sync(payload)
+                record_pull_history(
+                    alliance_id,
+                    payload["scrape_timestamp"],
+                    True,
+                    source=source,
+                    data_changed=data_changed,
+                )
+            except Exception:
+                log.exception("Forcepull failed for alliance %s (guild %s)", alliance_id, guild_id)
+                record_pull_history(
+                    alliance_id,
+                    pull_timestamp or scrape_timestamp(),
+                    False,
+                    source="test" if alliance and is_test_mode_enabled(alliance) else "forcepull",
+                )
 
         log.info("Forcepull completed for guild %s", guild_id)
 
     except Exception:
         log.exception("Forcepull failed for guild %s", guild_id)
         if alliance_id:
-            record_pull_history(
-                alliance_id,
-                pull_timestamp or scrape_timestamp(),
-                False,
-                source="test" if alliance and is_test_mode_enabled(alliance) else "forcepull",
-            )
+            record_pull_history(alliance_id, pull_timestamp or scrape_timestamp(), False, source="forcepull")
         
 def handle_forcepull(payload: dict):
     guild_id = payload.get("guild_id")
@@ -178,7 +224,14 @@ def handle_fullroster(payload: dict) -> dict:
             ephemeral=True,
         )
     state = load_state(alliance.get("id", guild_id))
-    messages = full_roster_messages(state)
+    overrides = get_guild_name_overrides(state, guild_id)
+    service_state = _load_service_state(alliance.get("id", guild_id))
+    active_names = set(service_state.keys())
+    messages = full_roster_messages(
+        state,
+        name_overrides=overrides,
+        active_names=active_names,
+    )
     primary = messages[0]
     if len(messages) > 1:
         app_id = payload.get("application_id")
@@ -187,18 +240,27 @@ def handle_fullroster(payload: dict) -> dict:
     return interaction_response(primary, ephemeral=True)
 
 
-def _find_member_by_name(state: dict, name: str) -> Optional[Member]:
+def _find_member_by_name(
+    state: dict,
+    name: str,
+    *,
+    guild_id: Optional[str] = None,
+) -> Optional[Member]:
     """Find a Member by (case-insensitive) exact name match.
 
     Returns the first Member instance with matching name, or None if not found.
     """
     target = name.lower()
+    guild_overrides = get_guild_name_overrides(state, guild_id)
     members_raw = (state.get("members") or {}).values()
     for data in members_raw:
         m = Member.from_json(data)
         if m.name.lower() == target:
             return m
         if any(prev.lower() == target for prev in (m.previous_names or [])):
+            return m
+        override = guild_overrides.get(m.uuid, "")
+        if override and override.lower() == target:
             return m
     return None
 
@@ -213,16 +275,88 @@ def _find_member_record(state: dict, name: str) -> tuple[Optional[str], Optional
     return None, None
 
 
-def handle_service_record(alliance_id: str, player_name: str) -> str:
+def _find_member_record_any_name(
+    state: dict,
+    name: str,
+    *,
+    guild_id: Optional[str] = None,
+) -> tuple[Optional[str], Optional[Member]]:
+    target = name.lower()
+    guild_overrides = get_guild_name_overrides(state, guild_id)
+    members_raw = (state.get("members") or {}).items()
+    for uid, data in members_raw:
+        member = Member.from_json(data)
+        if member.name.lower() == target:
+            return uid, member
+        if any(prev.lower() == target for prev in (member.previous_names or [])):
+            return uid, member
+        override = guild_overrides.get(member.uuid, "")
+        if override and override.lower() == target:
+            return uid, member
+    return None, None
+
+
+def _display_member_name(member: Member, guild_overrides: dict) -> str:
+    return guild_overrides.get(member.uuid, member.name)
+
+
+def _load_service_state(alliance_id: str) -> dict:
+    return load_json(report_state_path(alliance_id), {})
+
+
+def _member_contributions_since(
+    alliance_id: str,
+    member_name: str,
+    *,
+    days: int,
+) -> dict:
+    now = datetime.now(timezone.utc)
+    end_snapshot = load_snapshot_at_or_before(alliance_id, now)
+    current = end_snapshot or _load_service_state(alliance_id)
+    start_dt = now - timedelta(days=days)
+    start_snapshot = load_snapshot_at_or_before(alliance_id, start_dt)
+    previous = start_snapshot or current
+    deltas = compute_deltas(current, previous)
+    return deltas.get(member_name, {"helps": 0, "rss": 0, "iso": 0})
+
+
+def _member_total_contributions(alliance_id: str, member_name: str) -> dict:
+    service_state = _load_service_state(alliance_id)
+    return service_state.get(member_name, {"helps": 0, "rss": 0, "iso": 0})
+
+
+def handle_service_record(
+    alliance_id: str,
+    player_name: str,
+    *,
+    guild_id: Optional[str] = None,
+) -> str:
     """Return a formatted service record for the given player name.
 
     If the member is not found, returns a friendly error string rather than raising.
     """
     state = load_state(alliance_id)
-    member = _find_member_by_name(state, player_name)
+    member = _find_member_by_name(state, player_name, guild_id=guild_id)
     if not member:
         return f"Scrappy tilts his head — I can't find any officer named '{player_name}', Captain."
-    return service_record_command(member)
+    contributions_total = _member_total_contributions(alliance_id, member.name)
+    contributions_30 = _member_contributions_since(alliance_id, member.name, days=30)
+    contributions_7 = _member_contributions_since(alliance_id, member.name, days=7)
+    contributions_1 = _member_contributions_since(alliance_id, member.name, days=1)
+
+    overrides = get_guild_name_overrides(state, guild_id)
+    display_name = _display_member_name(member, overrides)
+    if display_name != member.name:
+        member = Member.from_json(member.to_json())
+        member.name = display_name
+    return service_record_command(
+        member,
+        power=member.power,
+        contributions_total=contributions_total,
+        contributions_30=contributions_30,
+        contributions_7=contributions_7,
+        contributions_1=contributions_1,
+    )
 
 
 def _get_subcommand_option(payload: dict, option_name: str) -> Optional[str]:
@@ -252,7 +386,7 @@ def handle_service_record_slash(payload: dict) -> dict:
             ephemeral=True,
         )
     alliance_id = alliance.get("id", guild_id)
-    message = handle_service_record(alliance_id, player_name)
+    message = handle_service_record(alliance_id, player_name, guild_id=guild_id)
     return interaction_response(message, ephemeral=True)
 
 
@@ -312,6 +446,33 @@ def _apply_manual_rename(alliance_id: str, old_name: str, new_name: str) -> str:
     state["members"] = members
     save_state(alliance_id, state)
     return f"✅ Updated {old_name} to **{new_name}** and merged records."
+
+
+def _apply_guild_name_override(
+    alliance_id: str,
+    guild_id: str,
+    target_name: str,
+    override_name: str,
+) -> str:
+    state = load_state(alliance_id)
+    member_id, member = _find_member_record_any_name(state, target_name, guild_id=guild_id)
+    if not member or not member_id:
+        return f"❌ Could not find an officer named '{target_name}'."
+    override_name = override_name.strip()
+    if not override_name:
+        return "❌ Override name cannot be empty."
+
+    overrides = get_guild_name_overrides(state, guild_id)
+    if override_name == member.name:
+        if member_id in overrides:
+            set_guild_name_override(state, guild_id=guild_id, member_uuid=member_id, display_name=None)
+            save_state(alliance_id, state)
+            return f"✅ Cleared guild name override for **{member.name}**."
+        return f"⚠️ No guild override set for **{member.name}**."
+
+    set_guild_name_override(state, guild_id=guild_id, member_uuid=member_id, display_name=override_name)
+    save_state(alliance_id, state)
+    return f"✅ Set guild name override: {member.name} → **{override_name}**."
 
 
 def _chunk_lines(lines: list[str], limit: int = 1900) -> list[str]:
@@ -501,7 +662,7 @@ def handle_manual_rename_slash(payload: dict) -> dict:
             ephemeral=True,
         )
     alliance_id = alliance.get("id", guild_id)
-    message = _apply_manual_rename(alliance_id, old_name, new_name)
+    message = _apply_guild_name_override(alliance_id, guild_id, old_name, new_name)
     return interaction_response(message, ephemeral=True)
 
 
