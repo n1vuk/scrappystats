@@ -25,7 +25,7 @@ configure_logging()
 
 app = FastAPI()
 START_TIME = utcnow()
-INTERIM_PERIOD_OPTIONS = ("daily", "weekly")
+INTERIM_PERIOD_OPTIONS = ("interim", "daily", "weekly")
 
 ## Check for valid config file and fail if one is not found
 load_config(fatal=True)

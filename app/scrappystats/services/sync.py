@@ -100,6 +100,12 @@ def _detect_rejoins(previous: Dict[str, Member],
             )
     return rejoins
 
+def _is_repeat_leave(member: Member) -> bool:
+    events = list(getattr(member, "service_events", []) or [])
+    if not events:
+        return False
+    return events[-1].get("type") == "leave"
+
 
 def _member_join_date(member: Member) -> str:
     for attr in ("last_join_date", "original_join_date"):
@@ -304,6 +310,7 @@ def sync_alliance(alliance_cfg: dict) -> bool:
             "helps": scraped.get("helps", 0) or 0,
             "rss": scraped.get("rss", 0) or 0,
             "iso": scraped.get("iso", 0) or 0,
+            "power": scraped.get("power", 0) or 0,
         }
         # Try to find an existing member with this name
         match_uuid = None
@@ -348,6 +355,7 @@ def sync_alliance(alliance_cfg: dict) -> bool:
 
     # Run detection on Member objects
     joins, leaves, renames, promotions, demotions = detect_member_events(prev_members, curr_members)
+    leaves = [member for member in leaves if not _is_repeat_leave(member)]
 
     # Additional event types derived here
     level_ups = _detect_level_ups(prev_members, curr_members)

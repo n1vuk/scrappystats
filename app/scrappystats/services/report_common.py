@@ -107,14 +107,14 @@ def make_table(headers, rows, *, min_widths=None):
     """
     Build a fixed-width monospace table suitable for Discord code blocks.
     """
-    if not rows:
-        return "No data available."
-
     if min_widths and len(min_widths) != len(headers):
         raise ValueError("min_widths must match headers length")
 
     def is_number(value) -> bool:
         return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+    if not rows:
+        rows = [["No data available."] + [""] * (len(headers) - 1)]
 
     widths = [len(h) for h in headers]
     if min_widths:

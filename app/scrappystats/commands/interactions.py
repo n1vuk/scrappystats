@@ -44,10 +44,27 @@ from ..utils import (
     PENDING_RENAMES_DIR,
 )
 from ..webhook.sender import post_webhook_message
-from ..services.report_common import compute_deltas, load_snapshot_at_or_before
+from ..services.report_common import (
+    compute_deltas,
+    load_snapshot_at_or_after,
+    load_snapshot_at_or_before,
+)
 
 
 log = logging.getLogger("scrappystats.forcepull")
+
+def _format_pull_timestamp(raw: str | None) -> str:
+    if not raw:
+        return "Unknown time"
+    value = str(raw)
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.astimezone(timezone.utc)
+        return parsed.strftime("%b %d, %Y %H:%M UTC")
+    except ValueError:
+        return value
 
 def _send_followups_async(
     app_id: Optional[str],
@@ -315,6 +332,8 @@ def _member_contributions_since(
     current = end_snapshot or _load_service_state(alliance_id)
     start_dt = now - timedelta(days=days)
     start_snapshot = load_snapshot_at_or_before(alliance_id, start_dt)
+    if not start_snapshot:
+        start_snapshot = load_snapshot_at_or_after(alliance_id, start_dt)
     previous = start_snapshot or current
     deltas = compute_deltas(current, previous)
     return deltas.get(member_name, {"helps": 0, "rss": 0, "iso": 0})
@@ -324,12 +343,49 @@ def _member_total_contributions(alliance_id: str, member_name: str) -> dict:
     service_state = _load_service_state(alliance_id)
     return service_state.get(member_name, {"helps": 0, "rss": 0, "iso": 0})
 
+def _parse_report_timestamp(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    value = str(raw).strip().replace(" ", "T")
+    if value.endswith("Z") and "+" in value:
+        value = value[:-1]
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        try:
+            parsed_date = datetime.fromisoformat(value)
+            parsed = parsed_date.replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+def _member_power_at_or_before(
+    alliance_id: str,
+    member_name: str,
+    target_dt: datetime,
+) -> int | None:
+    snapshot = load_snapshot_at_or_before(alliance_id, target_dt)
+    if not snapshot:
+        return None
+    power = snapshot.get(member_name, {}).get("power")
+    if power is None:
+        return None
+    return int(power or 0)
+
+def _power_gain(current: int, baseline: int | None) -> int:
+    if baseline is None:
+        return 0
+    return max(current - int(baseline or 0), 0)
+
 
 def handle_service_record(
     alliance_id: str,
     player_name: str,
     *,
     guild_id: Optional[str] = None,
+    alliance_name: Optional[str] = None,
 ) -> str:
     """Return a formatted service record for the given player name.
 
@@ -343,20 +399,43 @@ def handle_service_record(
     contributions_30 = _member_contributions_since(alliance_id, member.name, days=30)
     contributions_7 = _member_contributions_since(alliance_id, member.name, days=7)
     contributions_1 = _member_contributions_since(alliance_id, member.name, days=1)
+    service_state = _load_service_state(alliance_id)
+    is_active_member = member.name in service_state
+    current_power = int(service_state.get(member.name, {}).get("power", member.power) or 0)
+
+    now = datetime.now(timezone.utc)
+    start_of_today = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
+    power_today = _member_power_at_or_before(alliance_id, member.name, start_of_today)
+    power_7 = _member_power_at_or_before(alliance_id, member.name, now - timedelta(days=7))
+    power_30 = _member_power_at_or_before(alliance_id, member.name, now - timedelta(days=30))
+    last_join_dt = _parse_report_timestamp(member.last_join_date)
+    power_since_join = (
+        _member_power_at_or_before(alliance_id, member.name, last_join_dt)
+        if last_join_dt
+        else None
+    )
 
     overrides = get_guild_name_overrides(state, guild_id)
     display_name = _display_member_name(member, overrides)
     if display_name != member.name:
         member = Member.from_json(member.to_json())
         member.name = display_name
-    return service_record_command(
+    message = service_record_command(
         member,
-        power=member.power,
+        power=current_power,
+        power_since_join=_power_gain(current_power, power_since_join),
+        power_today=_power_gain(current_power, power_today),
+        power_7=_power_gain(current_power, power_7),
+        power_30=_power_gain(current_power, power_30),
         contributions_total=contributions_total,
         contributions_30=contributions_30,
         contributions_7=contributions_7,
         contributions_1=contributions_1,
     )
+    if not is_active_member:
+        alliance_label = (alliance_name or "THIS ALLIANCE").upper()
+        return f"NO LONGER A MEMBER OF {alliance_label}\n{message}"
+    return message
 
 
 def _get_subcommand_option(payload: dict, option_name: str) -> Optional[str]:
@@ -386,7 +465,12 @@ def handle_service_record_slash(payload: dict) -> dict:
             ephemeral=True,
         )
     alliance_id = alliance.get("id", guild_id)
-    message = handle_service_record(alliance_id, player_name, guild_id=guild_id)
+    message = handle_service_record(
+        alliance_id,
+        player_name,
+        guild_id=guild_id,
+        alliance_name=alliance.get("alliance_name") or alliance.get("name"),
+    )
     return interaction_response(message, ephemeral=True)
 
 
@@ -683,8 +767,8 @@ def handle_pull_history_slash(payload: dict) -> dict:
         )
     recent = history[-5:]
     lines = ["🧭 **Last 5 pulls**"]
-    for entry in reversed(recent):
-        ts = entry.get("timestamp", "Unknown time")
+    for entry in recent:
+        ts = _format_pull_timestamp(entry.get("timestamp"))
         status = "✅ Success" if entry.get("success") else "❌ Failed"
         source = entry.get("source")
         suffix = f" ({source})" if source else ""

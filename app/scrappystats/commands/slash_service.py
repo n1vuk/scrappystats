@@ -15,7 +15,10 @@ from ..webhook.sender import post_webhook_message
 def _format_timestamp(raw: str | None) -> str:
     if not raw:
         return "Unknown"
-    value = str(raw)
+    value = str(raw).strip()
+    value = value.replace(" ", "T")
+    if value.endswith("Z") and "+" in value:
+        value = value[:-1]
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
         if parsed.tzinfo is None:
@@ -35,6 +38,10 @@ def service_record_command(
     member: Member,
     *,
     power: int | str | None = None,
+    power_since_join: int | None = None,
+    power_today: int | None = None,
+    power_7: int | None = None,
+    power_30: int | None = None,
     contributions_total: dict | None = None,
     contributions_30: dict | None = None,
     contributions_7: dict | None = None,
@@ -49,6 +56,13 @@ def service_record_command(
         power = getattr(member, "power", 0)
     power_value = power if isinstance(power, int) else int(power or 0)
     lines.append(f"Power: {power_value}")
+    lines.append(
+        "Power gained since last join: "
+        f"{int(power_since_join or 0)}"
+    )
+    lines.append(f"Power gained today: {int(power_today or 0)}")
+    lines.append(f"Power gained last 7 days: {int(power_7 or 0)}")
+    lines.append(f"Power gained last 30 days: {int(power_30 or 0)}")
     lines.append(f"Original Join: {_format_timestamp(member.original_join_date)}")
     lines.append(f"Last Join: {_format_timestamp(member.last_join_date)}")
     if getattr(member, "previous_names", None):
@@ -113,6 +127,8 @@ def service_record_command(
             desc = f"Promoted from {ev.get('old_rank')} to {ev.get('new_rank')}"
         elif etype == "demotion":
             desc = f"Demoted from {ev.get('old_rank')} to {ev.get('new_rank')}"
+        elif etype == "level_up":
+            desc = f"Leveled up from {ev.get('old_level')} to {ev.get('new_level')}"
         else:
             # Fallback: show raw type if something new appears
             desc = etype or "Event"
@@ -141,12 +157,12 @@ def _resolve_report_period(payload: dict, fallback: ReportPeriod) -> ReportPerio
     if options:
         sub = options[0]
         sub_name = sub.get("name")
-        if sub_name in _REPORT_BY_SUBCOMMAND:
-            return _REPORT_BY_SUBCOMMAND[sub_name]
         sub_options = sub.get("options") or []
         for opt in sub_options:
             if opt.get("name") == "period" and opt.get("value") in _REPORT_VALUES:
                 return opt["value"]
+        if sub_name in _REPORT_BY_SUBCOMMAND:
+            return _REPORT_BY_SUBCOMMAND[sub_name]
     for opt in options:
         if opt.get("name") == "period" and opt.get("value") in _REPORT_VALUES:
             return opt["value"]
