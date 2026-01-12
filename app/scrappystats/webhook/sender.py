@@ -38,24 +38,58 @@ def _chunk_message(content: str) -> list[str]:
     chunks = []
     current = []
     current_len = 0
+    in_code_block = False
+
+    def append_line(line: str) -> None:
+        nonlocal current_len
+        current.append(line)
+        current_len += len(line) + 1
+
+    def finalize_chunk() -> None:
+        nonlocal current, current_len
+        chunks.append("\n".join(current))
+        current = []
+        current_len = 0
+
+    def close_code_block_for_chunk() -> None:
+        if not in_code_block:
+            return
+        append_line("```")
+
     for line in content.splitlines():
         line_len = len(line)
-        if current and current_len + line_len + 1 > MAX_CONTENT_LEN:
-            chunks.append("\n".join(current))
-            current = []
-            current_len = 0
+        extra_close_len = 4 if in_code_block else 0
+        if current and current_len + line_len + 1 + extra_close_len > MAX_CONTENT_LEN:
+            if in_code_block:
+                close_code_block_for_chunk()
+            finalize_chunk()
+            if in_code_block:
+                append_line("```")
         if line_len >= MAX_CONTENT_LEN:
             if current:
-                chunks.append("\n".join(current))
-                current = []
-                current_len = 0
+                if in_code_block:
+                    close_code_block_for_chunk()
+                finalize_chunk()
+                if in_code_block:
+                    append_line("```")
             for i in range(0, line_len, MAX_CONTENT_LEN):
-                chunks.append(line[i : i + MAX_CONTENT_LEN])
+                segment = line[i : i + MAX_CONTENT_LEN]
+                if in_code_block:
+                    chunks.append("\n".join(["```", segment, "```"]))
+                else:
+                    chunks.append(segment)
             continue
-        current.append(line)
-        current_len += line_len + 1
+        append_line(line)
+        if line.count("```") % 2 == 1:
+            in_code_block = not in_code_block
     if current:
-        chunks.append("\n".join(current))
+        if in_code_block:
+            if current_len + 4 > MAX_CONTENT_LEN:
+                finalize_chunk()
+                chunks.append("```")
+            else:
+                append_line("```")
+        finalize_chunk()
     return chunks
 
 

@@ -38,6 +38,10 @@ def _format_timestamp(raw: str | None) -> str:
 def _format_join_date(raw: str | None) -> str:
     if not raw:
         return "Unknown"
+    if isinstance(raw, (datetime, date)):
+        return raw.strftime("%b %d, %Y")
+    if isinstance(raw, (int, float)):
+        return datetime.fromtimestamp(raw, tz=timezone.utc).strftime("%b %d, %Y")
     value = str(raw).strip()
     value = value.replace(" ", "T")
     if value.endswith("Z") and "+" in value:
@@ -47,8 +51,9 @@ def _format_join_date(raw: str | None) -> str:
         return parsed.date().strftime("%b %d, %Y")
     except ValueError:
         pass
+    date_part = value.split("T", 1)[0][:10]
     try:
-        parsed_date = date.fromisoformat(value.split("T", 1)[0])
+        parsed_date = date.fromisoformat(date_part)
         return parsed_date.strftime("%b %d, %Y")
     except ValueError:
         return value
