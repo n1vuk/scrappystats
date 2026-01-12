@@ -1,3 +1,9 @@
+## 3.7
+- Add resources mined to service reports and fix snapshot fallback so daily/weekly reports use the nearest available baseline.
+- Improve service records with formatted dates/numbers, contribution tables, and resilient stat lookups.
+- Show max power in full roster output and archive one member detail HTML/JSON sample per pull.
+- Restore period autocomplete behavior for report commands.
+
 ## 3.5
 - Add power deltas and level-up details to service records, using latest pull power as the current value.
 - Allow service records for departed members with a clear banner, and avoid duplicate departure webhooks on forcepulls.

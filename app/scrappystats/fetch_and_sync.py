@@ -58,7 +58,11 @@ def main() -> int:
                 }
                 record_source = "test"
             else:
-                roster = fetch_alliance_roster(alliance_id, debug=debug)
+                roster = fetch_alliance_roster(
+                    alliance_id,
+                    debug=debug,
+                    scrape_stamp=timestamp,
+                )
                 payload = {
                     "id": alliance_id,
                     "scraped_members": roster,

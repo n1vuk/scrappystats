@@ -78,7 +78,7 @@ def build_service_reports(
 
         state, baseline = load_state_and_baseline(alliance_id, report_type)
         start_snapshot = load_snapshot_at_or_before(alliance_id, start_dt)
-        if report_type == "interim" and not start_snapshot:
+        if not start_snapshot:
             start_snapshot = load_snapshot_at_or_after(alliance_id, start_dt)
         end_snapshot = load_snapshot_at_or_before(alliance_id, end_dt)
         current = end_snapshot or state
@@ -218,7 +218,8 @@ def format_service_report(
         helps = max(delta.get("helps", 0) or 0, 0)
         rss = max(delta.get("rss", 0) or 0, 0)
         iso = max(delta.get("iso", 0) or 0, 0)
-        if helps == 0 and rss == 0 and iso == 0:
+        resources_mined = max(delta.get("resources_mined", 0) or 0, 0)
+        if helps == 0 and rss == 0 and iso == 0 and resources_mined == 0:
             continue
         rank = meta.get("rank", "")
         level = meta.get("level", "")
@@ -232,6 +233,7 @@ def format_service_report(
                 "helps": helps,
                 "rss": rss,
                 "iso": iso,
+                "resources_mined": resources_mined,
                 "rank_idx": rank_idx,
             }
         )
@@ -241,13 +243,21 @@ def format_service_report(
 
     rows.sort(key=lambda row: (row["rank_idx"], -float(row["helps"]), row["name"].lower()))
     table_rows = [
-        [row["name"], row["rank"], row["level"], row["helps"], row["rss"], row["iso"]]
+        [
+            row["name"],
+            row["rank"],
+            row["level"],
+            row["helps"],
+            row["rss"],
+            row["iso"],
+            row["resources_mined"],
+        ]
         for row in rows
     ]
     table = make_table(
-        ["Member", "Rank", "Lvl", "Helps", "RSS", "ISO"],
+        ["Member", "Rank", "Lvl", "Helps", "RSS", "ISO", "Mined"],
         table_rows,
-        min_widths=[20, 10, 3, 5, 7, 5],
+        min_widths=[20, 10, 3, 5, 7, 5, 7],
     )
 
     lines = [

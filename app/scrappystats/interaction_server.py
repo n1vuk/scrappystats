@@ -330,7 +330,7 @@ async def interactions(request: Request):
                     "weeklyreport",
                 }:
                     choices = handle_player_autocomplete(payload, query)
-            elif option_name == "period" and sub_name == "interimreport":
+            elif option_name == "period":
                 choices = _autocomplete_period_options(query, INTERIM_PERIOD_OPTIONS)
         return JSONResponse({"type": 8, "data": {"choices": choices}})
 

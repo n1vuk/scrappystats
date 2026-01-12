@@ -9,7 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from scrappystats.log import configure_logging
-from scrappystats.utils import save_raw_html
+from scrappystats.utils import save_raw_html, save_raw_json
 
 configure_logging()
 
@@ -105,7 +105,7 @@ def parse_member_stats(html: str) -> dict:
     return {key: value for key, value in stats.items() if value is not None}
 
 
-def fetch_member_stats(detail_url: str) -> dict:
+def fetch_member_detail_html(detail_url: str) -> str:
     url = detail_url
     if not detail_url.startswith("http"):
         url = urljoin(ROOT_URL, detail_url)
@@ -118,7 +118,12 @@ def fetch_member_stats(detail_url: str) -> dict:
         },
     )
     resp.raise_for_status()
-    return parse_member_stats(resp.text)
+    return resp.text
+
+
+def fetch_member_stats(detail_url: str) -> dict:
+    html = fetch_member_detail_html(detail_url)
+    return parse_member_stats(html)
 
 
 def _header_cells(table) -> list[str]:
@@ -264,7 +269,17 @@ def parse_roster(html: str) -> Dict[str, dict]:
     return roster
 
 
-def fetch_alliance_roster(alliance_id: str, debug: bool = False) -> List[dict]:
+def _member_sample_stamp(scrape_stamp: str, member_name: str) -> str:
+    safe_name = re.sub(r"[^a-zA-Z0-9_-]+", "_", member_name).strip("_") or "member"
+    return f"{scrape_stamp}_member_{safe_name}"
+
+
+def fetch_alliance_roster(
+    alliance_id: str,
+    *,
+    debug: bool = False,
+    scrape_stamp: str | None = None,
+) -> List[dict]:
     html = fetch_alliance_page(alliance_id)
     if debug:
         try:
@@ -274,12 +289,22 @@ def fetch_alliance_roster(alliance_id: str, debug: bool = False) -> List[dict]:
             log.exception("Failed to save raw HTML for alliance %s", alliance_id)
     roster = parse_roster(html)
     members = list(roster.values())
+    saved_sample = False
     for member in members:
         detail_url = member.get("detail_url")
         if not detail_url:
             continue
         try:
-            detail_stats = fetch_member_stats(detail_url)
+            if not saved_sample and scrape_stamp:
+                detail_html = fetch_member_detail_html(detail_url)
+                detail_stats = parse_member_stats(detail_html)
+                sample_stamp = _member_sample_stamp(scrape_stamp, member.get("name", "member"))
+                save_raw_html(alliance_id, detail_html, stamp=sample_stamp)
+                sample_payload = {**member, **detail_stats}
+                save_raw_json(alliance_id, sample_payload, stamp=sample_stamp)
+                saved_sample = True
+            else:
+                detail_stats = fetch_member_stats(detail_url)
         except Exception:
             log.exception("Failed to fetch member stats: %s", detail_url)
             continue

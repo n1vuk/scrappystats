@@ -25,6 +25,7 @@ def _deserialize_members(members_raw: Dict[str, dict]):
 def full_roster_messages(
     alliance_state: dict,
     *,
+    service_state: dict | None = None,
     name_overrides: dict | None = None,
     active_names: set[str] | None = None,
 ) -> List[str]:
@@ -36,6 +37,7 @@ def full_roster_messages(
     members_raw = alliance_state.get("members", {}) or {}
     members = _deserialize_members(members_raw)
     overrides = name_overrides or {}
+    service_state = service_state or {}
     if active_names is not None:
         members = [member for member in members if member.name in active_names]
 
@@ -74,7 +76,13 @@ def full_roster_messages(
         orig_join = format_join_date(m.original_join_date)
         last_join = format_join_date(m.last_join_date)
         display_name = overrides.get(m.uuid, m.name)
-        power = m.power if isinstance(m.power, int) else int(m.power or 0)
+        member_stats = service_state.get(m.name, {}) or {}
+        power_value = member_stats.get("max_power")
+        if power_value is None:
+            power_value = member_stats.get("power")
+        if power_value is None:
+            power_value = m.power
+        power = power_value if isinstance(power_value, int) else int(power_value or 0)
         line = (
             f"{display_name:<20} {m.rank:<10} {lvl:>3} {power:>8}  "
             f"{last_join:<{date_width}} {orig_join:<{date_width}}"

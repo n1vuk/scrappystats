@@ -176,7 +176,11 @@ def _run_forcepull(guild_id: str):
                         "scrape_timestamp": test_timestamp,
                     }
                 else:
-                    roster = fetch_alliance_roster(alliance_id, debug=debug)
+                    roster = fetch_alliance_roster(
+                        alliance_id,
+                        debug=debug,
+                        scrape_stamp=pull_timestamp,
+                    )
                     source = "forcepull"
                     payload = {
                         "id": alliance_id,
@@ -246,6 +250,7 @@ def handle_fullroster(payload: dict) -> dict:
     active_names = set(service_state.keys())
     messages = full_roster_messages(
         state,
+        service_state=service_state,
         name_overrides=overrides,
         active_names=active_names,
     )

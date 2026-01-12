@@ -7,6 +7,7 @@ from datetime import date, datetime, timezone
 from typing import Literal
 
 from ..models.member import Member
+from ..services.report_common import make_table
 from ..services.report_service import build_service_reports
 from ..log import log  # or wherever log lives
 from ..discord_utils import interaction_response
@@ -34,6 +35,31 @@ def _format_timestamp(raw: str | None) -> str:
         return value
 
 
+def _format_number(value: int | str | None) -> str:
+    if value is None:
+        return "0"
+    if isinstance(value, int):
+        return f"{value:,}"
+    if isinstance(value, str):
+        cleaned = value.replace(",", "").strip()
+        if cleaned.isdigit():
+            return f"{int(cleaned):,}"
+    try:
+        return f"{int(value or 0):,}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _format_contribution_row(label: str, data: dict) -> list[str]:
+    return [
+        label,
+        _format_number(data.get("helps", 0)),
+        _format_number(data.get("rss", 0)),
+        _format_number(data.get("iso", 0)),
+        _format_number(data.get("resources_mined", 0)),
+    ]
+
+
 def service_record_command(
     member: Member,
     *,
@@ -56,33 +82,33 @@ def service_record_command(
 ) -> str:
     """Return a formatted service record for the given Member instance."""
     lines = []
-    lines.append(f"📘 Service Record: {member.name}")
-    lines.append(f"Current Rank: {member.rank}")
-    lines.append(f"Current Level: {member.level}")
+    lines.append(f"📘 **Service Record:** {member.name}")
+    lines.append(f"**Current Rank:** {member.rank}")
+    lines.append(f"**Current Level:** {member.level}")
     if power is None:
         power = getattr(member, "power", 0)
     power_value = power if isinstance(power, int) else int(power or 0)
-    lines.append(f"Power: {power_value}")
+    lines.append(f"**Current Power:** {_format_number(power_value)}")
     if max_power is None:
         max_power = power_value
-    lines.append(f"Max Power: {int(max_power or 0)}")
-    lines.append(f"Power Destroyed: {int(power_destroyed or 0)}")
-    lines.append(f"Arena Rating: {int(arena_rating or 0)}")
-    lines.append(f"Assessment Rank: {int(assessment_rank or 0)}")
-    lines.append(f"Missions Completed: {int(missions_completed or 0)}")
-    lines.append(f"Resources Mined: {int(resources_mined or 0)}")
-    lines.append(f"Alliance Helps Sent: {int(alliance_helps_sent or 0)}")
+    lines.append(f"**Max Power:** {_format_number(max_power)}")
+    lines.append(f"**Power Destroyed:** {_format_number(power_destroyed)}")
+    lines.append(f"**Arena Rating:** {_format_number(arena_rating)}")
+    lines.append(f"**Assessment Rank:** {_format_number(assessment_rank)}")
+    lines.append(f"**Missions Completed:** {_format_number(missions_completed)}")
+    lines.append(f"**Resources Mined:** {_format_number(resources_mined)}")
+    lines.append(f"**Alliance Helps Sent:** {_format_number(alliance_helps_sent)}")
     lines.append(
-        "Power gained since last join: "
-        f"{int(power_since_join or 0)}"
+        "**Power gained since last join:** "
+        f"{_format_number(power_since_join)}"
     )
-    lines.append(f"Power gained today: {int(power_today or 0)}")
-    lines.append(f"Power gained last 7 days: {int(power_7 or 0)}")
-    lines.append(f"Power gained last 30 days: {int(power_30 or 0)}")
-    lines.append(f"Original Join: {_format_timestamp(member.original_join_date)}")
-    lines.append(f"Last Join: {_format_timestamp(member.last_join_date)}")
+    lines.append(f"**Power gained today:** {_format_number(power_today)}")
+    lines.append(f"**Power gained last 7 days:** {_format_number(power_7)}")
+    lines.append(f"**Power gained last 30 days:** {_format_number(power_30)}")
+    lines.append(f"**Original Join:** {_format_timestamp(member.original_join_date)}")
+    lines.append(f"**Last Join:** {_format_timestamp(member.last_join_date)}")
     if getattr(member, "previous_names", None):
-        lines.append(f"Previous Names: {', '.join(member.previous_names)}")
+        lines.append(f"**Previous Names:** {', '.join(member.previous_names)}")
     lines.append("")
 
     events = list(getattr(member, "service_events", []) or [])
@@ -95,35 +121,18 @@ def service_record_command(
     last_1 = contributions_1 or {"helps": 0, "rss": 0, "iso": 0, "resources_mined": 0}
 
     lines.append("")
-    lines.append("Contributions:")
-    lines.append(
-        "Since last join: "
-        f"Helps {int(totals.get('helps', 0) or 0)}, "
-        f"RSS {int(totals.get('rss', 0) or 0)}, "
-        f"ISO {int(totals.get('iso', 0) or 0)}, "
-        f"Mined {int(totals.get('resources_mined', 0) or 0)}"
+    lines.append("**Contributions:**")
+    contributions_table = make_table(
+        ["Period", "Helps", "RSS", "ISO", "Mined"],
+        [
+            _format_contribution_row("Since last join", totals),
+            _format_contribution_row("Last 30 days", last_30),
+            _format_contribution_row("Last 7 days", last_7),
+            _format_contribution_row("Last day", last_1),
+        ],
+        min_widths=[16, 5, 7, 5, 7],
     )
-    lines.append(
-        "Last 30 days: "
-        f"Helps {int(last_30.get('helps', 0) or 0)}, "
-        f"RSS {int(last_30.get('rss', 0) or 0)}, "
-        f"ISO {int(last_30.get('iso', 0) or 0)}, "
-        f"Mined {int(last_30.get('resources_mined', 0) or 0)}"
-    )
-    lines.append(
-        "Last 7 days: "
-        f"Helps {int(last_7.get('helps', 0) or 0)}, "
-        f"RSS {int(last_7.get('rss', 0) or 0)}, "
-        f"ISO {int(last_7.get('iso', 0) or 0)}, "
-        f"Mined {int(last_7.get('resources_mined', 0) or 0)}"
-    )
-    lines.append(
-        "Last day: "
-        f"Helps {int(last_1.get('helps', 0) or 0)}, "
-        f"RSS {int(last_1.get('rss', 0) or 0)}, "
-        f"ISO {int(last_1.get('iso', 0) or 0)}, "
-        f"Mined {int(last_1.get('resources_mined', 0) or 0)}"
-    )
+    lines.extend(["```", contributions_table, "```"])
 
     if not events:
         return "\n".join(lines)
@@ -131,7 +140,7 @@ def service_record_command(
     # Sort by timestamp if present
     events.sort(key=lambda e: e.get("timestamp", ""))
 
-    lines.append("Events:")
+    lines.append("**Events:**")
     for ev in events:
         etype = ev.get("type", "")
         ts = _format_timestamp(ev.get("timestamp"))
