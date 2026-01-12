@@ -17,7 +17,7 @@ from scrappystats.storage.state import load_state, get_guild_name_overrides
 from .report_common import (
     load_state_and_baseline,
     compute_deltas,
-    make_table,
+    build_table_from_rows,
     load_snapshot_at_or_before,
     load_snapshot_at_or_after,
 )
@@ -242,23 +242,16 @@ def format_service_report(
         return None
 
     rows.sort(key=lambda row: (row["rank_idx"], -float(row["helps"]), row["name"].lower()))
-    table_rows = [
-        [
-            row["name"],
-            row["rank"],
-            row["level"],
-            row["helps"],
-            row["rss"],
-            row["iso"],
-            row["resources_mined"],
-        ]
-        for row in rows
+    column_specs = [
+        {"key": "name", "label": "Member", "min_width": 20},
+        {"key": "rank", "label": "Rank", "min_width": 10},
+        {"key": "level", "label": "Lvl", "min_width": 3},
+        {"key": "helps", "label": "Helps", "min_width": 5},
+        {"key": "rss", "label": "RSS", "min_width": 7},
+        {"key": "iso", "label": "ISO", "min_width": 5},
+        {"key": "resources_mined", "label": "Mined", "min_width": 7},
     ]
-    table = make_table(
-        ["Member", "Rank", "Lvl", "Helps", "RSS", "ISO", "Mined"],
-        table_rows,
-        min_widths=[20, 10, 3, 5, 7, 5, 7],
-    )
+    table = build_table_from_rows(column_specs, rows)
 
     lines = [
         REPORT_TITLES[report_type],

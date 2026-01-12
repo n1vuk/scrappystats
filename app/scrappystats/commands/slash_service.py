@@ -7,7 +7,7 @@ from datetime import date, datetime, timezone
 from typing import Literal
 
 from ..models.member import Member
-from ..services.report_common import make_table
+from ..services.report_common import build_table_from_rows
 from ..services.report_service import build_service_reports
 from ..log import log  # or wherever log lives
 from ..discord_utils import interaction_response
@@ -35,6 +35,25 @@ def _format_timestamp(raw: str | None) -> str:
         return value
 
 
+def _format_join_date(raw: str | None) -> str:
+    if not raw:
+        return "Unknown"
+    value = str(raw).strip()
+    value = value.replace(" ", "T")
+    if value.endswith("Z") and "+" in value:
+        value = value[:-1]
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed.date().strftime("%b %d, %Y")
+    except ValueError:
+        pass
+    try:
+        parsed_date = date.fromisoformat(value.split("T", 1)[0])
+        return parsed_date.strftime("%b %d, %Y")
+    except ValueError:
+        return value
+
+
 def _format_number(value: int | str | None) -> str:
     if value is None:
         return "0"
@@ -51,13 +70,13 @@ def _format_number(value: int | str | None) -> str:
 
 
 def _format_contribution_row(label: str, data: dict) -> list[str]:
-    return [
-        label,
-        _format_number(data.get("helps", 0)),
-        _format_number(data.get("rss", 0)),
-        _format_number(data.get("iso", 0)),
-        _format_number(data.get("resources_mined", 0)),
-    ]
+    return {
+        "period": label,
+        "helps": _format_number(data.get("helps", 0)),
+        "rss": _format_number(data.get("rss", 0)),
+        "iso": _format_number(data.get("iso", 0)),
+        "resources_mined": _format_number(data.get("resources_mined", 0)),
+    }
 
 
 def service_record_command(
@@ -105,8 +124,8 @@ def service_record_command(
     lines.append(f"**Power gained today:** {_format_number(power_today)}")
     lines.append(f"**Power gained last 7 days:** {_format_number(power_7)}")
     lines.append(f"**Power gained last 30 days:** {_format_number(power_30)}")
-    lines.append(f"**Original Join:** {_format_timestamp(member.original_join_date)}")
-    lines.append(f"**Last Join:** {_format_timestamp(member.last_join_date)}")
+    lines.append(f"**Original Join:** {_format_join_date(member.original_join_date)}")
+    lines.append(f"**Last Join:** {_format_join_date(member.last_join_date)}")
     if getattr(member, "previous_names", None):
         lines.append(f"**Previous Names:** {', '.join(member.previous_names)}")
     lines.append("")
@@ -122,15 +141,21 @@ def service_record_command(
 
     lines.append("")
     lines.append("**Contributions:**")
-    contributions_table = make_table(
-        ["Period", "Helps", "RSS", "ISO", "Mined"],
+    column_specs = [
+        {"key": "period", "label": "Period", "min_width": 16},
+        {"key": "helps", "label": "Helps", "min_width": 5},
+        {"key": "rss", "label": "RSS", "min_width": 7},
+        {"key": "iso", "label": "ISO", "min_width": 5},
+        {"key": "resources_mined", "label": "Mined", "min_width": 7},
+    ]
+    contributions_table = build_table_from_rows(
+        column_specs,
         [
             _format_contribution_row("Since last join", totals),
             _format_contribution_row("Last 30 days", last_30),
             _format_contribution_row("Last 7 days", last_7),
             _format_contribution_row("Last day", last_1),
         ],
-        min_widths=[16, 5, 7, 5, 7],
     )
     lines.extend(["```", contributions_table, "```"])
 

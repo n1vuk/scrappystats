@@ -1,3 +1,8 @@
+## 3.7a
+- Centralize report table rendering and add coverage for missing/extra column handling.
+- Format service record join dates as human-readable calendar dates.
+- Restore interim report period options and validate report table output in CI.
+
 ## 3.7
 - Add resources mined to service reports and fix snapshot fallback so daily/weekly reports use the nearest available baseline.
 - Improve service records with formatted dates/numbers, contribution tables, and resilient stat lookups.

@@ -145,3 +145,29 @@ def make_table(headers, rows, *, min_widths=None):
         lines.append(fmt_row(row))
 
     return "\n".join(lines)
+
+
+def build_table_from_rows(columns: list[dict], rows: list[dict]) -> str:
+    """
+    Build a fixed-width monospace table from column specs and row dicts.
+    """
+    headers = [column.get("label", "") for column in columns]
+    keys = [column.get("key") for column in columns]
+    min_widths = [column.get("min_width", 0) or 0 for column in columns]
+
+    normalized_rows = []
+    for row in rows:
+        values = [row.get(key, "") for key in keys]
+        if len(values) < len(headers):
+            values.extend([""] * (len(headers) - len(values)))
+        elif len(values) > len(headers):
+            values = values[:len(headers)]
+        normalized_rows.append(values)
+
+    widths = [len(str(header)) for header in headers]
+    for row in normalized_rows:
+        for idx, cell in enumerate(row):
+            widths[idx] = max(widths[idx], len(str(cell)))
+    widths = [max(widths[i], min_widths[i]) for i in range(len(widths))]
+
+    return make_table(headers, normalized_rows, min_widths=widths)
