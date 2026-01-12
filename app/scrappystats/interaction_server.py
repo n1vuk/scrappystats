@@ -15,7 +15,9 @@ from .commands.interactions import (
     handle_name_changes_slash,
     handle_pull_history_slash,
     handle_player_autocomplete,
+    handle_alliance_autocomplete,
 )
+from .interaction_state import pop_pending
 from scrappystats.config import load_config
 
 log = logging.getLogger("scrappystats.interactions")
@@ -45,6 +47,13 @@ COMMANDS = [
                 "options": [
                     {
                         "type": 3,
+                        "name": "alliance",
+                        "description": "Alliance name or ID for this server.",
+                        "required": False,
+                        "autocomplete": True,
+                    },
+                    {
+                        "type": 3,
                         "name": "player",
                         "description": "Exact player name to filter.",
                         "required": False,
@@ -57,6 +66,13 @@ COMMANDS = [
                 "name": "weeklyreport",
                 "description": "Show the weekly alliance report.",
                 "options": [
+                    {
+                        "type": 3,
+                        "name": "alliance",
+                        "description": "Alliance name or ID for this server.",
+                        "required": False,
+                        "autocomplete": True,
+                    },
                     {
                         "type": 3,
                         "name": "player",
@@ -73,6 +89,13 @@ COMMANDS = [
                 "options": [
                     {
                         "type": 3,
+                        "name": "alliance",
+                        "description": "Alliance name or ID for this server.",
+                        "required": False,
+                        "autocomplete": True,
+                    },
+                    {
+                        "type": 3,
                         "name": "period",
                         "description": "Choose daily or weekly interim window.",
                         "required": False,
@@ -80,14 +103,60 @@ COMMANDS = [
                     }
                 ],
             },
-            {"type": 1, "name": "forcepull", "description": "Force Scrappy to fetch new data."},
-            {"type": 1, "name": "pullhistory", "description": "Show the last 5 data pulls."},
-            {"type": 1, "name": "fullroster", "description": "Show full roster with join dates."},
+            {
+                "type": 1,
+                "name": "forcepull",
+                "description": "Force Scrappy to fetch new data.",
+                "options": [
+                    {
+                        "type": 3,
+                        "name": "alliance",
+                        "description": "Alliance name or ID for this server.",
+                        "required": False,
+                        "autocomplete": True,
+                    }
+                ],
+            },
+            {
+                "type": 1,
+                "name": "pullhistory",
+                "description": "Show the last 5 data pulls.",
+                "options": [
+                    {
+                        "type": 3,
+                        "name": "alliance",
+                        "description": "Alliance name or ID for this server.",
+                        "required": False,
+                        "autocomplete": True,
+                    }
+                ],
+            },
+            {
+                "type": 1,
+                "name": "fullroster",
+                "description": "Show full roster with join dates.",
+                "options": [
+                    {
+                        "type": 3,
+                        "name": "alliance",
+                        "description": "Alliance name or ID for this server.",
+                        "required": False,
+                        "autocomplete": True,
+                    }
+                ],
+            },
             {
                 "type": 1,
                 "name": "servicerecord",
                 "description": "Show a member's service record.",
                 "options": [
+                    {
+                        "type": 3,
+                        "name": "alliance",
+                        "description": "Alliance name or ID for this server.",
+                        "required": False,
+                        "autocomplete": True,
+                    },
                     {
                         "type": 3,
                         "name": "player",
@@ -102,6 +171,13 @@ COMMANDS = [
                 "name": "namechanges",
                 "description": "Show recorded name changes.",
                 "options": [
+                    {
+                        "type": 3,
+                        "name": "alliance",
+                        "description": "Alliance name or ID for this server.",
+                        "required": False,
+                        "autocomplete": True,
+                    },
                     {
                         "type": 3,
                         "name": "player",
@@ -203,6 +279,12 @@ def _find_subcommand_name(options: list[dict]) -> str | None:
     return None
 
 
+def _extract_user_id(payload: dict) -> str | None:
+    member = payload.get("member") or {}
+    user = member.get("user") or payload.get("user") or {}
+    return user.get("id")
+
+
 # ─────────────────────────────────────────────
 # Interaction endpoint
 # ─────────────────────────────────────────────
@@ -277,6 +359,8 @@ async def interactions(request: Request):
                     "weeklyreport",
                 }:
                     choices = handle_player_autocomplete(payload, query)
+            elif option_name == "alliance":
+                choices = handle_alliance_autocomplete(payload, query)
             elif option_name == "period" and sub_name == "interimreport":
                 lowered = query.lower()
                 options = [
@@ -291,5 +375,45 @@ async def interactions(request: Request):
         if not focused or sub_name is None:
             sub_name = _find_subcommand_name(options)
         return JSONResponse({"type": 8, "data": {"choices": choices}})
+
+    # ---- Component interactions ----
+    if t == 3:
+        data = payload.get("data", {})
+        custom_id = data.get("custom_id") or ""
+        if custom_id.startswith("alliance_select:"):
+            parts = custom_id.split(":", 2)
+            if len(parts) == 3:
+                nonce = parts[1]
+                alliance_id = parts[2]
+                pending = pop_pending(nonce)
+                if not pending:
+                    return JSONResponse(
+                        interaction_response(
+                            "⏳ That selection expired. Please run the command again.",
+                            True,
+                        )
+                    )
+                user_id = _extract_user_id(payload)
+                if pending.get("user_id") and pending.get("user_id") != user_id:
+                    return JSONResponse(
+                        interaction_response(
+                            "⚠️ That selection isn't for you.",
+                            True,
+                        )
+                    )
+                sub_name = pending.get("subcommand")
+                options = list(pending.get("options") or [])
+                options.append({"name": "alliance", "value": alliance_id})
+                proxy_payload = {
+                    "guild_id": pending.get("guild_id"),
+                    "application_id": payload.get("application_id"),
+                    "token": payload.get("token"),
+                    "data": {"options": [{"name": sub_name, "options": options}]},
+                }
+                result = dispatch_command(sub_name, proxy_payload)
+                return JSONResponse(result)
+        return JSONResponse(
+            interaction_response("⚠️ Unknown interaction.", True)
+        )
 
     return JSONResponse({"error": "Unsupported interaction type"}, status_code=400)

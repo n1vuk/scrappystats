@@ -88,3 +88,35 @@ def get_guild_alliances(config: dict, guild_id: str) -> list:
     if not guild:
         return []
     return guild.get("alliances", []) or []
+
+
+def list_alliances_for_guild(config: dict, guild_id: str | None) -> list:
+    if guild_id:
+        return get_guild_alliances(config, guild_id)
+    return list_alliances(config)
+
+
+def resolve_alliance_for_guild(
+    config: dict,
+    guild_id: str | None,
+    selection: str | None,
+) -> tuple[dict | None, list]:
+    alliances = list_alliances_for_guild(config, guild_id)
+    if selection is None:
+        if len(alliances) == 1:
+            return alliances[0], alliances
+        return None, alliances
+    selection = str(selection).strip()
+    if not selection:
+        if len(alliances) == 1:
+            return alliances[0], alliances
+        return None, alliances
+    for alliance in alliances:
+        if str(alliance.get("id")) == selection:
+            return alliance, alliances
+    lowered = selection.lower()
+    for alliance in alliances:
+        name = str(alliance.get("name") or alliance.get("alliance_name") or "")
+        if name.lower() == lowered:
+            return alliance, alliances
+    return None, alliances

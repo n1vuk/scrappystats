@@ -1,3 +1,8 @@
+## 4.0.0i
+- Add interactive alliance selection buttons for multi-alliance servers.
+- Add alliance autocomplete/option support across slash commands.
+- Allow report commands to target a specific alliance when provided.
+
 ## 4.0.0h
 - Disable member detail pulls/worker unless explicitly enabled.
 - Turn off member detail cookie debug logging in the Docker image.

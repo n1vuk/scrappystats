@@ -21,9 +21,12 @@ from ..models.member import Member
 from .slash_fullroster import full_roster_messages
 from .slash_service import service_record_command
 from ..discord_utils import interaction_response, send_followup_message
-# refactor allience load to new function
-# from ..config import load_config
-from scrappystats.config import load_config, get_guild_alliances
+from scrappystats.config import (
+    load_config,
+    list_alliances_for_guild,
+    resolve_alliance_for_guild,
+)
+from scrappystats.interaction_state import create_pending
 #config = load_alliances()
 
 from ..services.fetch import fetch_alliance_roster, scrape_timestamp
@@ -76,34 +79,142 @@ def _send_followups_async(
 
     threading.Thread(target=_send, daemon=True).start()
 
-def _resolve_alliance(config: dict, guild_id: str) -> Optional[dict]:
-    alliances = get_guild_alliances(config, guild_id)
+def _alliance_label(alliance: dict) -> str:
+    name = alliance.get("name") or alliance.get("alliance_name") or "Unknown"
+    alliance_id = alliance.get("id")
+    if alliance_id:
+        return f"{name} ({alliance_id})"
+    return str(name)
 
-    if len(alliances) == 1:
+
+def _format_alliance_choices(alliances: list[dict]) -> str:
+    if not alliances:
+        return ""
+    labels = ", ".join(_alliance_label(alliance) for alliance in alliances)
+    return f" Available: {labels}"
+
+
+def _resolve_alliance_selection(
+    config: dict,
+    guild_id: str | None,
+    selection: Optional[str],
+) -> tuple[Optional[dict], list[dict]]:
+    alliance, alliances = resolve_alliance_for_guild(config, guild_id, selection)
+    if alliance and not selection:
         log.info(
             "Defaulting to the only configured alliance for guild %s",
             guild_id,
         )
-        return alliances[0]
+    return alliance, alliances
 
-    return None
+
+def _alliance_failure_message(
+    action: str,
+    alliances: list[dict],
+    selection: Optional[str],
+) -> str:
+    if not alliances:
+        return f"❌ {action} failed: no alliance configured for this server."
+    if selection:
+        return (
+            f"❌ {action} failed: alliance '{selection}' not found for this server."
+            f"{_format_alliance_choices(alliances)}"
+        )
+    return (
+        f"❌ {action} failed: multiple alliances are configured for this server."
+        " Re-run with the `alliance` option."
+        f"{_format_alliance_choices(alliances)}"
+    )
+
+
+def _get_subcommand_name(payload: dict) -> Optional[str]:
+    data = payload.get("data", {})
+    options = data.get("options") or []
+    if not options:
+        return None
+    return options[0].get("name")
+
+
+def _get_subcommand_options(payload: dict) -> list[dict]:
+    data = payload.get("data", {})
+    options = data.get("options") or []
+    if not options:
+        return []
+    sub = options[0]
+    return [
+        {"name": opt.get("name"), "value": opt.get("value")}
+        for opt in (sub.get("options") or [])
+        if opt.get("name") and "value" in opt
+    ]
+
+
+def _build_alliance_buttons(nonce: str, alliances: list[dict]) -> list[dict]:
+    rows: list[list[dict]] = []
+    current: list[dict] = []
+    for alliance in alliances[:25]:
+        alliance_id = str(alliance.get("id") or "").strip()
+        if not alliance_id:
+            continue
+        label = _alliance_label(alliance)
+        button = {
+            "type": 2,
+            "style": 1,
+            "label": label[:80],
+            "custom_id": f"alliance_select:{nonce}:{alliance_id}",
+        }
+        current.append(button)
+        if len(current) == 5:
+            rows.append(current)
+            current = []
+    if current:
+        rows.append(current)
+    return [{"type": 1, "components": row} for row in rows]
+
+
+def _prompt_alliance_selection(
+    payload: dict,
+    action: str,
+    alliances: list[dict],
+) -> dict:
+    subcommand = _get_subcommand_name(payload)
+    if not subcommand:
+        return interaction_response(
+            f"❌ {action} failed: unable to determine the command context.",
+            ephemeral=True,
+        )
+    options = _get_subcommand_options(payload)
+    options = [opt for opt in options if opt.get("name") != "alliance"]
+    nonce = create_pending(payload, subcommand, options)
+    components = _build_alliance_buttons(nonce, alliances)
+    content = (
+        f"🧭 {action} needs an alliance. Choose one below."
+        f"{_format_alliance_choices(alliances[:25])}"
+    )
+    return {
+        "type": 4,
+        "data": {
+            "content": content,
+            "flags": 64,
+            "components": components,
+        },
+    }
 
 
 def _resolve_alliances(config: dict, guild_id: str) -> list[dict]:
-    alliances = get_guild_alliances(config, guild_id)
+    alliances = list_alliances_for_guild(config, guild_id)
     if alliances:
         return alliances
-
     guilds = config.get("guilds") or []
     if guilds:
         return []
-
     return config.get("alliances", []) or []
 
 
 def handle_player_autocomplete(payload: dict, query: str) -> list[dict]:
     guild_id = payload.get("guild_id") or "default"
-    alliance = _resolve_alliance(load_config(), guild_id)
+    config = load_config()
+    selection = _get_subcommand_option(payload, "alliance")
+    alliance, _ = _resolve_alliance_selection(config, guild_id, selection)
     if not alliance:
         return []
     state = load_state(alliance.get("id", guild_id))
@@ -121,12 +232,45 @@ def handle_player_autocomplete(payload: dict, query: str) -> list[dict]:
         names = [name for name in names if needle in name.lower()]
     return [{"name": name, "value": name} for name in names[:25]]
 
-def _run_forcepull(guild_id: str):
+
+def handle_alliance_autocomplete(payload: dict, query: str) -> list[dict]:
+    guild_id = payload.get("guild_id") or "default"
+    config = load_config()
+    alliances = list_alliances_for_guild(config, guild_id)
+    choices = []
+    for alliance in alliances:
+        alliance_id = str(alliance.get("id") or "").strip()
+        label = _alliance_label(alliance)
+        value = alliance_id or str(alliance.get("name") or "").strip()
+        if not value:
+            continue
+        choices.append({"name": label, "value": value})
+    if query:
+        needle = query.lower()
+        choices = [choice for choice in choices if needle in choice["name"].lower()]
+    return choices[:25]
+
+def _run_forcepull(guild_id: str, alliance_selection: Optional[str] = None):
     alliance_id = None
     pull_timestamp = None
     try:
         config = load_config()
-        alliances = _resolve_alliances(config, guild_id)
+        if alliance_selection:
+            alliance, alliances = _resolve_alliance_selection(
+                config,
+                guild_id,
+                alliance_selection,
+            )
+            if not alliance:
+                log.error(
+                    "Forcepull failed for guild %s: alliance '%s' not configured",
+                    guild_id,
+                    alliance_selection,
+                )
+                return
+            alliances = [alliance]
+        else:
+            alliances = _resolve_alliances(config, guild_id)
         if not alliances:
             log.error("Forcepull failed for guild %s: no alliances configured", guild_id)
             return
@@ -217,9 +361,10 @@ def handle_forcepull(payload: dict):
             ephemeral=True,
         )
 
+    alliance_selection = _get_subcommand_option(payload, "alliance")
     threading.Thread(
         target=_run_forcepull,
-        args=(guild_id,),
+        args=(guild_id, alliance_selection),
         daemon=True,
     ).start()
 
@@ -232,10 +377,14 @@ def handle_forcepull(payload: dict):
 def handle_fullroster(payload: dict) -> dict:
     """Return a formatted full roster response for the given guild."""
     guild_id = payload.get("guild_id") or "default"
-    alliance = _resolve_alliance(load_config(), guild_id)
+    config = load_config()
+    selection = _get_subcommand_option(payload, "alliance")
+    alliance, alliances = _resolve_alliance_selection(config, guild_id, selection)
     if not alliance:
+        if alliances and not selection:
+            return _prompt_alliance_selection(payload, "Full roster", alliances)
         return interaction_response(
-            "❌ Full roster failed: no alliance configured for this server.",
+            _alliance_failure_message("Full roster", alliances, selection),
             ephemeral=True,
         )
     state = load_state(alliance.get("id", guild_id))
@@ -438,10 +587,14 @@ def _get_subcommand_option(payload: dict, option_name: str) -> Optional[str]:
 
 def handle_service_record_slash(payload: dict) -> dict:
     guild_id = payload.get("guild_id") or "default"
-    alliance = _resolve_alliance(load_config(), guild_id)
+    config = load_config()
+    selection = _get_subcommand_option(payload, "alliance")
+    alliance, alliances = _resolve_alliance_selection(config, guild_id, selection)
     if not alliance:
+        if alliances and not selection:
+            return _prompt_alliance_selection(payload, "Service record", alliances)
         return interaction_response(
-            "❌ Service record failed: no alliance configured for this server.",
+            _alliance_failure_message("Service record", alliances, selection),
             ephemeral=True,
         )
     player_name = _get_subcommand_option(payload, "player")
@@ -512,10 +665,14 @@ def _collect_name_change_members(state: dict) -> list[Member]:
 
 def handle_name_changes_slash(payload: dict) -> dict:
     guild_id = payload.get("guild_id") or "default"
-    alliance = _resolve_alliance(load_config(), guild_id)
+    config = load_config()
+    selection = _get_subcommand_option(payload, "alliance")
+    alliance, alliances = _resolve_alliance_selection(config, guild_id, selection)
     if not alliance:
+        if alliances and not selection:
+            return _prompt_alliance_selection(payload, "Name change lookup", alliances)
         return interaction_response(
-            "❌ Name change lookup failed: no alliance configured for this server.",
+            _alliance_failure_message("Name change lookup", alliances, selection),
             ephemeral=True,
         )
     state = load_state(alliance.get("id", guild_id))
@@ -554,10 +711,14 @@ def handle_name_changes_slash(payload: dict) -> dict:
 
 def handle_pull_history_slash(payload: dict) -> dict:
     guild_id = payload.get("guild_id") or "default"
-    alliance = _resolve_alliance(load_config(), guild_id)
+    config = load_config()
+    selection = _get_subcommand_option(payload, "alliance")
+    alliance, alliances = _resolve_alliance_selection(config, guild_id, selection)
     if not alliance:
+        if alliances and not selection:
+            return _prompt_alliance_selection(payload, "Pull history lookup", alliances)
         return interaction_response(
-            "❌ Pull history lookup failed: no alliance configured for this server.",
+            _alliance_failure_message("Pull history lookup", alliances, selection),
             ephemeral=True,
         )
     state = load_state(alliance.get("id", guild_id))

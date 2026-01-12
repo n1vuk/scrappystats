@@ -12,6 +12,7 @@ from ..services.report_service import build_service_reports
 from ..log import log  # or wherever log lives
 from ..discord_utils import interaction_response
 from ..webhook.sender import post_webhook_message
+from scrappystats.config import load_config, resolve_alliance_for_guild
 
 def _format_timestamp(raw: str | None) -> str:
     if not raw:
@@ -251,6 +252,40 @@ def _get_subcommand_option(payload: dict, option_name: str):
     return None
 
 
+def _alliance_label(alliance: dict) -> str:
+    name = alliance.get("name") or alliance.get("alliance_name") or "Unknown"
+    alliance_id = alliance.get("id")
+    if alliance_id:
+        return f"{name} ({alliance_id})"
+    return str(name)
+
+
+def _format_alliance_choices(alliances: list[dict]) -> str:
+    if not alliances:
+        return ""
+    labels = ", ".join(_alliance_label(alliance) for alliance in alliances)
+    return f" Available: {labels}"
+
+
+def _alliance_failure_message(
+    action: str,
+    alliances: list[dict],
+    selection: str | None,
+) -> str:
+    if not alliances:
+        return f"❌ {action} failed: no alliance configured for this server."
+    if selection:
+        return (
+            f"❌ {action} failed: alliance '{selection}' not found for this server."
+            f"{_format_alliance_choices(alliances)}"
+        )
+    return (
+        f"❌ {action} failed: multiple alliances are configured for this server."
+        " Re-run with the `alliance` option."
+        f"{_format_alliance_choices(alliances)}"
+    )
+
+
 def handle_report_slash(payload: dict, period: ReportPeriod):
     """
     Thin adapter for slash commands.
@@ -259,16 +294,34 @@ def handle_report_slash(payload: dict, period: ReportPeriod):
     guild_id = payload.get("guild_id")
     resolved_period = _resolve_report_period(payload, period)
     player_name = _get_subcommand_option(payload, "player")
+    alliance_selection = _get_subcommand_option(payload, "alliance")
     log.info(
         "Slash report requested: guild=%s period=%s",
         guild_id,
         resolved_period,
     )
+    if alliance_selection:
+        config = load_config()
+        alliance, alliances = resolve_alliance_for_guild(
+            config,
+            guild_id,
+            alliance_selection,
+        )
+        if not alliance:
+            return interaction_response(
+                _alliance_failure_message("Report", alliances, alliance_selection),
+                ephemeral=True,
+            )
+        alliance_id = str(alliance.get("id"))
+    else:
+        alliance_id = None
     reports = build_service_reports(
         resolved_period,
         guild_id=guild_id,
         player_name=player_name,
     )
+    if alliance_id:
+        reports = [report for report in reports if report[0] == alliance_id]
     for alliance_id, message in reports:
         post_webhook_message(message, alliance_id=alliance_id)
     if not reports:
