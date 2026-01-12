@@ -72,6 +72,15 @@ COMMANDS = [
                 "type": 1,
                 "name": "interimreport",
                 "description": "Show the interim alliance report.",
+                "options": [
+                    {
+                        "type": 3,
+                        "name": "period",
+                        "description": "Choose daily or weekly interim window.",
+                        "required": False,
+                        "autocomplete": True,
+                    }
+                ],
             },
             {"type": 1, "name": "forcepull", "description": "Force Scrappy to fetch new data."},
             {"type": 1, "name": "pullhistory", "description": "Show the last 5 data pulls."},
@@ -316,6 +325,17 @@ async def interactions(request: Request):
                     "weeklyreport",
                 }:
                     choices = handle_player_autocomplete(payload, query)
+            elif option_name == "period" and sub_name == "interimreport":
+                lowered = query.lower()
+                options = [
+                    {"name": "daily", "value": "daily"},
+                    {"name": "weekly", "value": "weekly"},
+                ]
+                if lowered:
+                    options = [
+                        choice for choice in options if choice["name"].startswith(lowered)
+                    ]
+                choices = options
         if not focused or sub_name is None:
             sub_name = _find_subcommand_name(options)
         return JSONResponse({"type": 8, "data": {"choices": choices}})

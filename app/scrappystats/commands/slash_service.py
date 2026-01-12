@@ -53,12 +53,19 @@ def _format_join_date(raw: str | None) -> str:
         return parsed.date().strftime("%b %d, %Y")
     except ValueError:
         pass
-    date_part = value.split("T", 1)[0][:10]
+    date_part = value.split("T", 1)[0].strip()
     try:
-        parsed_date = date.fromisoformat(date_part)
+        parsed_date = date.fromisoformat(date_part[:10])
         return parsed_date.strftime("%b %d, %Y")
     except ValueError:
-        return value
+        pass
+    for fmt in ("%B %d, %Y", "%b %d, %Y"):
+        try:
+            parsed_date = datetime.strptime(date_part, fmt).date()
+            return parsed_date.strftime("%b %d, %Y")
+        except ValueError:
+            continue
+    return date_part or value
 
 
 def _format_number(value: int | str | None) -> str:

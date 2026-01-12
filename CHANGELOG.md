@@ -1,3 +1,7 @@
+## 3.7d
+- Show interim report period autocomplete choices for daily/weekly.
+- Normalize service record join dates for consistent, human-readable output.
+
 ## 3.7a
 - Centralize report table rendering and add coverage for missing/extra column handling.
 - Format service record join dates as human-readable calendar dates.
