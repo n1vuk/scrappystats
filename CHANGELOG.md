@@ -1,3 +1,8 @@
+## 4.0.0a
+- Track STFC player_id as the stable identity for members and use it to match joins/leaves/renames.
+- Scrape alliance Nuxt payloads for player_id and prefer the playerDetails API for member stats when available.
+- Remove manual rename review workflow; log when name-based matching is used as a fallback.
+
 ## 3.7d
 - Show interim report period autocomplete choices for daily/weekly.
 - Normalize service record join dates for consistent, human-readable output.

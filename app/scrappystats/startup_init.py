@@ -5,6 +5,8 @@ import subprocess
 from pathlib import Path
 
 from scrappystats.config import load_config, list_alliances
+from scrappystats.services.report_service import save_report_baselines
+from scrappystats.version import __version__
 from scrappystats.utils import (
     ARCHIVE_DIR,
     EVENTS_DIR,
@@ -75,6 +77,11 @@ def main():
     logging.info("Alliances config loaded successfully")
     logging.info("Running initial fetch_and_sync.py")
     subprocess.run(["python3", "-m", "scrappystats.fetch_and_sync"], check=False)
+    # TEMP (remove in 4.0.0b): seed report baselines for existing snapshots.
+    if __version__.startswith("4.0.0a"):
+        logging.info("Seeding report baselines for daily/weekly reports")
+        save_report_baselines("daily")
+        save_report_baselines("weekly")
     logging.info("Running initial daily report")
     subprocess.run(["python3", "-m", "scrappystats.report_daily"], check=False)
     logging.info("Running initial weekly report")

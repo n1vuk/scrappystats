@@ -111,5 +111,6 @@ def initialize_member(scraped: dict, scrape_timestamp: str) -> dict:
         original_join_date=combined_ts,
         last_join_date=combined_ts,
         power=power_value,
+        player_id=scraped.get("player_id"),
     )
     return m.to_json()

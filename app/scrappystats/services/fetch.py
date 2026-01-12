@@ -1,8 +1,9 @@
 """Fetch alliance roster data from STFC.pro (v2 pipeline)."""
+import json
 import logging
 import re
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import urljoin
 
 import requests
@@ -126,6 +127,69 @@ def fetch_member_stats(detail_url: str) -> dict:
     return parse_member_stats(html)
 
 
+def _coerce_int(value) -> Optional[int]:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        return _parse_number(value)
+    return None
+
+
+def _find_payload_candidate(payload: dict) -> dict:
+    for key in ("player", "data", "result", "playerDetails", "details"):
+        value = payload.get(key)
+        if isinstance(value, dict):
+            return value
+    return payload
+
+
+def _payload_value(payload: dict, *keys: str):
+    lower_map = {
+        key.lower(): key
+        for key in payload.keys()
+        if isinstance(key, str)
+    }
+    for key in keys:
+        mapped = lower_map.get(key.lower())
+        if mapped is not None:
+            return payload.get(mapped)
+    return None
+
+
+def parse_member_details_payload(payload: dict) -> dict:
+    candidate = _find_payload_candidate(payload)
+    stats = {
+        "power": _coerce_int(_payload_value(candidate, "power")),
+        "max_power": _coerce_int(_payload_value(candidate, "maxPower", "max_power")),
+        "power_destroyed": _coerce_int(_payload_value(candidate, "powerDestroyed", "power_destroyed")),
+        "arena_rating": _coerce_int(_payload_value(candidate, "arenaRating", "arena_rating")),
+        "assessment_rank": _coerce_int(_payload_value(candidate, "assessmentRank", "assessment_rank")),
+        "missions_completed": _coerce_int(_payload_value(candidate, "missionsCompleted", "missions_completed")),
+        "resources_mined": _coerce_int(_payload_value(candidate, "resourcesMined", "resources_mined")),
+        "alliance_helps_sent": _coerce_int(
+            _payload_value(candidate, "allianceHelpsSent", "alliance_helps_sent")
+        ),
+    }
+    return {key: value for key, value in stats.items() if value is not None}
+
+
+def fetch_member_details_api(player_id: str) -> Tuple[dict, Optional[dict]]:
+    url = f"{ROOT_URL}/api/playerDetails?playerid={player_id}"
+    resp = requests.get(
+        url,
+        timeout=30,
+        headers={
+            "Accept": "application/json",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
+    )
+    resp.raise_for_status()
+    payload = resp.json()
+    return parse_member_details_payload(payload), payload
+
+
 def _header_cells(table) -> list[str]:
     header_row = None
     thead = table.find("thead")
@@ -178,6 +242,77 @@ def _extract_detail_url(cell) -> str | None:
         return None
     return urljoin(ROOT_URL, href)
 
+def _extract_nuxt_payload(html: str) -> list | None:
+    match = re.search(
+        r'<script[^>]+id="__NUXT_DATA__"[^>]*>(.*?)</script>',
+        html,
+        re.DOTALL,
+    )
+    if not match:
+        return None
+    raw = match.group(1)
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, list) else None
+
+
+def _extract_player_ids_from_nuxt(html: str) -> dict[str, str]:
+    payload = _extract_nuxt_payload(html)
+    if not payload:
+        return {}
+    name_to_id: dict[str, str] = {}
+    for item in payload:
+        if not isinstance(item, dict) or "playerid" not in item:
+            continue
+        pid_idx = item.get("playerid")
+        name_idx = item.get("owner") if "owner" in item else item.get("name")
+        if not isinstance(pid_idx, int) or not isinstance(name_idx, int):
+            continue
+        if pid_idx >= len(payload) or name_idx >= len(payload):
+            continue
+        pid_val = payload[pid_idx]
+        name_val = payload[name_idx]
+        if not isinstance(pid_val, int) or not isinstance(name_val, str):
+            continue
+        name_to_id[name_val] = str(pid_val)
+    return name_to_id
+
+
+def _extract_player_id(detail_url: str | None) -> str | None:
+    if not detail_url:
+        return None
+    match = re.search(r"/player/(\d+)", detail_url)
+    if match:
+        return match.group(1)
+    match = re.search(r"[?&]playerid=(\d+)", detail_url)
+    if match:
+        return match.group(1)
+    return None
+
+
+def _extract_player_id_from_attrs(*nodes) -> str | None:
+    attr_keys = (
+        "data-player-id",
+        "data-playerid",
+        "data-player",
+        "data-id",
+        "playerid",
+        "player-id",
+    )
+    for node in nodes:
+        if not node or not hasattr(node, "attrs"):
+            continue
+        for key in attr_keys:
+            raw = node.attrs.get(key)
+            if not raw:
+                continue
+            match = re.search(r"\d+", str(raw))
+            if match:
+                return match.group(0)
+    return None
+
 
 def parse_roster(html: str) -> Dict[str, dict]:
     soup = BeautifulSoup(html, "html.parser")
@@ -186,6 +321,7 @@ def parse_roster(html: str) -> Dict[str, dict]:
         raise RuntimeError("Roster table not found")
 
     headers = _header_cells(table)
+    nuxt_player_ids = _extract_player_ids_from_nuxt(html)
 
     roster: Dict[str, dict] = {}
     for tr in table.find_all("tr"):
@@ -201,6 +337,9 @@ def parse_roster(html: str) -> Dict[str, dict]:
         if not name:
             continue
         detail_url = _extract_detail_url(name_cell)
+        player_id = _extract_player_id(detail_url) or _extract_player_id_from_attrs(name_cell, tr)
+        if not player_id:
+            player_id = nuxt_player_ids.get(name)
 
         role_div = tds[2].find("div", class_="ml-0")
         role = role_div.get_text(strip=True) if role_div else "Agent"
@@ -264,6 +403,7 @@ def parse_roster(html: str) -> Dict[str, dict]:
             "iso": iso,
             "join_date": join_date,
             "detail_url": detail_url,
+            "player_id": player_id,
         }
 
     return roster
@@ -292,10 +432,20 @@ def fetch_alliance_roster(
     saved_sample = False
     for member in members:
         detail_url = member.get("detail_url")
-        if not detail_url:
+        player_id = member.get("player_id")
+        if not detail_url and not player_id:
             continue
         try:
-            if not saved_sample and scrape_stamp:
+            if player_id:
+                detail_stats, detail_payload = fetch_member_details_api(player_id)
+                if not saved_sample and scrape_stamp:
+                    sample_stamp = _member_sample_stamp(scrape_stamp, member.get("name", "member"))
+                    if detail_payload is not None:
+                        save_raw_json(alliance_id, detail_payload, stamp=sample_stamp)
+                    sample_payload = {**member, **detail_stats}
+                    save_raw_json(alliance_id, sample_payload, stamp=f"{sample_stamp}_member")
+                    saved_sample = True
+            elif not saved_sample and scrape_stamp:
                 detail_html = fetch_member_detail_html(detail_url)
                 detail_stats = parse_member_stats(detail_html)
                 sample_stamp = _member_sample_stamp(scrape_stamp, member.get("name", "member"))
@@ -306,7 +456,8 @@ def fetch_alliance_roster(
             else:
                 detail_stats = fetch_member_stats(detail_url)
         except Exception:
-            log.exception("Failed to fetch member stats: %s", detail_url)
+            target = detail_url or f"player_id={player_id}"
+            log.exception("Failed to fetch member stats: %s", target)
             continue
         if detail_stats:
             member.update(detail_stats)
