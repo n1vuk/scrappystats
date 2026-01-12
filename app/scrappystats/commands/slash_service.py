@@ -38,6 +38,13 @@ def service_record_command(
     member: Member,
     *,
     power: int | str | None = None,
+    max_power: int | None = None,
+    power_destroyed: int | None = None,
+    arena_rating: int | None = None,
+    assessment_rank: int | None = None,
+    missions_completed: int | None = None,
+    resources_mined: int | None = None,
+    alliance_helps_sent: int | None = None,
     power_since_join: int | None = None,
     power_today: int | None = None,
     power_7: int | None = None,
@@ -56,6 +63,15 @@ def service_record_command(
         power = getattr(member, "power", 0)
     power_value = power if isinstance(power, int) else int(power or 0)
     lines.append(f"Power: {power_value}")
+    if max_power is None:
+        max_power = power_value
+    lines.append(f"Max Power: {int(max_power or 0)}")
+    lines.append(f"Power Destroyed: {int(power_destroyed or 0)}")
+    lines.append(f"Arena Rating: {int(arena_rating or 0)}")
+    lines.append(f"Assessment Rank: {int(assessment_rank or 0)}")
+    lines.append(f"Missions Completed: {int(missions_completed or 0)}")
+    lines.append(f"Resources Mined: {int(resources_mined or 0)}")
+    lines.append(f"Alliance Helps Sent: {int(alliance_helps_sent or 0)}")
     lines.append(
         "Power gained since last join: "
         f"{int(power_since_join or 0)}"
@@ -73,10 +89,10 @@ def service_record_command(
     if not events:
         lines.append("No recorded events yet.")
 
-    totals = contributions_total or {"helps": 0, "rss": 0, "iso": 0}
-    last_30 = contributions_30 or {"helps": 0, "rss": 0, "iso": 0}
-    last_7 = contributions_7 or {"helps": 0, "rss": 0, "iso": 0}
-    last_1 = contributions_1 or {"helps": 0, "rss": 0, "iso": 0}
+    totals = contributions_total or {"helps": 0, "rss": 0, "iso": 0, "resources_mined": 0}
+    last_30 = contributions_30 or {"helps": 0, "rss": 0, "iso": 0, "resources_mined": 0}
+    last_7 = contributions_7 or {"helps": 0, "rss": 0, "iso": 0, "resources_mined": 0}
+    last_1 = contributions_1 or {"helps": 0, "rss": 0, "iso": 0, "resources_mined": 0}
 
     lines.append("")
     lines.append("Contributions:")
@@ -84,25 +100,29 @@ def service_record_command(
         "Since last join: "
         f"Helps {int(totals.get('helps', 0) or 0)}, "
         f"RSS {int(totals.get('rss', 0) or 0)}, "
-        f"ISO {int(totals.get('iso', 0) or 0)}"
+        f"ISO {int(totals.get('iso', 0) or 0)}, "
+        f"Mined {int(totals.get('resources_mined', 0) or 0)}"
     )
     lines.append(
         "Last 30 days: "
         f"Helps {int(last_30.get('helps', 0) or 0)}, "
         f"RSS {int(last_30.get('rss', 0) or 0)}, "
-        f"ISO {int(last_30.get('iso', 0) or 0)}"
+        f"ISO {int(last_30.get('iso', 0) or 0)}, "
+        f"Mined {int(last_30.get('resources_mined', 0) or 0)}"
     )
     lines.append(
         "Last 7 days: "
         f"Helps {int(last_7.get('helps', 0) or 0)}, "
         f"RSS {int(last_7.get('rss', 0) or 0)}, "
-        f"ISO {int(last_7.get('iso', 0) or 0)}"
+        f"ISO {int(last_7.get('iso', 0) or 0)}, "
+        f"Mined {int(last_7.get('resources_mined', 0) or 0)}"
     )
     lines.append(
         "Last day: "
         f"Helps {int(last_1.get('helps', 0) or 0)}, "
         f"RSS {int(last_1.get('rss', 0) or 0)}, "
-        f"ISO {int(last_1.get('iso', 0) or 0)}"
+        f"ISO {int(last_1.get('iso', 0) or 0)}, "
+        f"Mined {int(last_1.get('resources_mined', 0) or 0)}"
     )
 
     if not events:

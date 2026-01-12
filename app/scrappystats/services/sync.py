@@ -306,11 +306,21 @@ def sync_alliance(alliance_cfg: dict) -> bool:
 
     for scraped in scraped_members:
         name = scraped["name"]
+        power_value = scraped.get("max_power")
+        if power_value is None:
+            power_value = scraped.get("power", 0) or 0
         service_state[name] = {
             "helps": scraped.get("helps", 0) or 0,
             "rss": scraped.get("rss", 0) or 0,
             "iso": scraped.get("iso", 0) or 0,
-            "power": scraped.get("power", 0) or 0,
+            "power": power_value,
+            "max_power": scraped.get("max_power", power_value) or 0,
+            "power_destroyed": scraped.get("power_destroyed", 0) or 0,
+            "arena_rating": scraped.get("arena_rating", 0) or 0,
+            "assessment_rank": scraped.get("assessment_rank", 0) or 0,
+            "missions_completed": scraped.get("missions_completed", 0) or 0,
+            "resources_mined": scraped.get("resources_mined", 0) or 0,
+            "alliance_helps_sent": scraped.get("alliance_helps_sent", 0) or 0,
         }
         # Try to find an existing member with this name
         match_uuid = None
@@ -325,7 +335,7 @@ def sync_alliance(alliance_cfg: dict) -> bool:
             m.name = scraped["name"]
             m.rank = scraped.get("rank", m.rank)
             m.level = scraped.get("level", m.level)
-            m.power = scraped.get("power", getattr(m, "power", 0)) or 0
+            m.power = power_value or 0
             join_date = scraped.get("join_date")
             combined_join = _combine_join_date(join_date, scrape_timestamp)
             if combined_join and not m.original_join_date:

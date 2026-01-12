@@ -73,8 +73,6 @@ def main():
     if not test_mode_enabled:
         _clear_alliance_test_data("1")
     logging.info("Alliances config loaded successfully")
-    logging.info("Running initial fetch_and_process.py")
-    subprocess.run(["python3", "-m", "scrappystats.fetch_and_process"], check=False)
     logging.info("Running initial fetch_and_sync.py")
     subprocess.run(["python3", "-m", "scrappystats.fetch_and_sync"], check=False)
     logging.info("Running initial daily report")

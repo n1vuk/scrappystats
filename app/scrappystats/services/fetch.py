@@ -1,7 +1,9 @@
 """Fetch alliance roster data from STFC.pro (v2 pipeline)."""
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Dict, List
+from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -14,6 +16,7 @@ configure_logging()
 log = logging.getLogger("scrappystats.fetch")
 
 BASE_URL = "https://stfc.pro/alliance/"
+ROOT_URL = "https://stfc.pro"
 
 
 def fetch_alliance_page(alliance_id: str) -> str:
@@ -52,6 +55,70 @@ def _parse_number(txt: str) -> int:
             return int(float(txt))
         except Exception:
             return 0
+
+
+def _normalize_label(text: str) -> str:
+    cleaned = re.sub(r"[^a-z0-9]+", " ", text.lower())
+    return " ".join(cleaned.split())
+
+
+def _next_numeric_text(node) -> str | None:
+    current = node
+    for _ in range(40):
+        current = getattr(current, "next_element", None)
+        if current is None:
+            break
+        if isinstance(current, str):
+            text = current.strip()
+        else:
+            text = current.get_text(strip=True) if hasattr(current, "get_text") else ""
+        if text and any(ch.isdigit() for ch in text):
+            return text
+    return None
+
+
+def _extract_stat_value(soup: BeautifulSoup, labels: tuple[str, ...]) -> int | None:
+    label_set = {_normalize_label(label) for label in labels}
+    for text_node in soup.find_all(string=True):
+        label = text_node.strip()
+        if not label:
+            continue
+        if _normalize_label(label) in label_set:
+            value_text = _next_numeric_text(text_node)
+            if value_text:
+                return _parse_number(value_text)
+    return None
+
+
+def parse_member_stats(html: str) -> dict:
+    soup = BeautifulSoup(html, "html.parser")
+    stats = {
+        "power": _extract_stat_value(soup, ("power",)),
+        "max_power": _extract_stat_value(soup, ("max power", "max. power")),
+        "power_destroyed": _extract_stat_value(soup, ("power destroyed",)),
+        "arena_rating": _extract_stat_value(soup, ("arena rating",)),
+        "assessment_rank": _extract_stat_value(soup, ("assessment rank",)),
+        "missions_completed": _extract_stat_value(soup, ("missions completed",)),
+        "resources_mined": _extract_stat_value(soup, ("resources mined",)),
+        "alliance_helps_sent": _extract_stat_value(soup, ("alliance helps sent",)),
+    }
+    return {key: value for key, value in stats.items() if value is not None}
+
+
+def fetch_member_stats(detail_url: str) -> dict:
+    url = detail_url
+    if not detail_url.startswith("http"):
+        url = urljoin(ROOT_URL, detail_url)
+    resp = requests.get(
+        url,
+        timeout=30,
+        headers={
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
+    )
+    resp.raise_for_status()
+    return parse_member_stats(resp.text)
 
 
 def _header_cells(table) -> list[str]:
@@ -97,6 +164,16 @@ def _cell_text(
     return None
 
 
+def _extract_detail_url(cell) -> str | None:
+    link = cell.find("a", href=True)
+    if not link:
+        return None
+    href = link.get("href")
+    if not href:
+        return None
+    return urljoin(ROOT_URL, href)
+
+
 def parse_roster(html: str) -> Dict[str, dict]:
     soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table")
@@ -111,12 +188,14 @@ def parse_roster(html: str) -> Dict[str, dict]:
         if len(tds) < 7:
             continue
 
-        name_span = tds[1].find("span", class_="cursor-pointer")
+        name_cell = tds[1]
+        name_span = name_cell.find("span", class_="cursor-pointer")
         if not name_span:
             continue
         name = name_span.get_text(strip=True)
         if not name:
             continue
+        detail_url = _extract_detail_url(name_cell)
 
         role_div = tds[2].find("div", class_="ml-0")
         role = role_div.get_text(strip=True) if role_div else "Agent"
@@ -179,6 +258,7 @@ def parse_roster(html: str) -> Dict[str, dict]:
             "rss": rss,
             "iso": iso,
             "join_date": join_date,
+            "detail_url": detail_url,
         }
 
     return roster
@@ -193,7 +273,21 @@ def fetch_alliance_roster(alliance_id: str, debug: bool = False) -> List[dict]:
         except Exception:
             log.exception("Failed to save raw HTML for alliance %s", alliance_id)
     roster = parse_roster(html)
-    return list(roster.values())
+    members = list(roster.values())
+    for member in members:
+        detail_url = member.get("detail_url")
+        if not detail_url:
+            continue
+        try:
+            detail_stats = fetch_member_stats(detail_url)
+        except Exception:
+            log.exception("Failed to fetch member stats: %s", detail_url)
+            continue
+        if detail_stats:
+            member.update(detail_stats)
+            if detail_stats.get("max_power") is not None:
+                member["power"] = detail_stats["max_power"]
+    return members
 
 
 def scrape_timestamp() -> str:

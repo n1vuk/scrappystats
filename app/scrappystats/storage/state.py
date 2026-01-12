@@ -100,6 +100,9 @@ def initialize_member(scraped: dict, scrape_timestamp: str) -> dict:
         time_part = "00:00:00Z"
     combined_ts = f"{join_date}T{time_part}"
 
+    power_value = scraped.get("max_power")
+    if power_value is None:
+        power_value = scraped.get("power", 0) or 0
     m = Member(
         uuid=str(uuid.uuid4()),
         name=scraped["name"],
@@ -107,6 +110,6 @@ def initialize_member(scraped: dict, scrape_timestamp: str) -> dict:
         rank=scraped.get("rank", "Unknown"),
         original_join_date=combined_ts,
         last_join_date=combined_ts,
-        power=scraped.get("power", 0) or 0,
+        power=power_value,
     )
     return m.to_json()

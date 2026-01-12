@@ -336,12 +336,18 @@ def _member_contributions_since(
         start_snapshot = load_snapshot_at_or_after(alliance_id, start_dt)
     previous = start_snapshot or current
     deltas = compute_deltas(current, previous)
-    return deltas.get(member_name, {"helps": 0, "rss": 0, "iso": 0})
+    return deltas.get(
+        member_name,
+        {"helps": 0, "rss": 0, "iso": 0, "resources_mined": 0},
+    )
 
 
 def _member_total_contributions(alliance_id: str, member_name: str) -> dict:
     service_state = _load_service_state(alliance_id)
-    return service_state.get(member_name, {"helps": 0, "rss": 0, "iso": 0})
+    return service_state.get(
+        member_name,
+        {"helps": 0, "rss": 0, "iso": 0, "resources_mined": 0},
+    )
 
 def _parse_report_timestamp(raw: str | None) -> datetime | None:
     if not raw:
@@ -361,20 +367,17 @@ def _parse_report_timestamp(raw: str | None) -> datetime | None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
 
-def _member_power_at_or_before(
+def _member_stat_at_or_before(
     alliance_id: str,
     member_name: str,
     target_dt: datetime,
-) -> int | None:
+) -> dict:
     snapshot = load_snapshot_at_or_before(alliance_id, target_dt)
     if not snapshot:
-        return None
-    power = snapshot.get(member_name, {}).get("power")
-    if power is None:
-        return None
-    return int(power or 0)
+        return {}
+    return snapshot.get(member_name, {}) or {}
 
-def _power_gain(current: int, baseline: int | None) -> int:
+def _stat_gain(current: int, baseline: int | None) -> int:
     if baseline is None:
         return 0
     return max(current - int(baseline or 0), 0)
@@ -401,16 +404,24 @@ def handle_service_record(
     contributions_1 = _member_contributions_since(alliance_id, member.name, days=1)
     service_state = _load_service_state(alliance_id)
     is_active_member = member.name in service_state
-    current_power = int(service_state.get(member.name, {}).get("power", member.power) or 0)
+    member_state = service_state.get(member.name, {}) or {}
+    current_power = int(member_state.get("power", member.power) or 0)
+    max_power = int(member_state.get("max_power", current_power) or 0)
+    power_destroyed = int(member_state.get("power_destroyed", 0) or 0)
+    arena_rating = int(member_state.get("arena_rating", 0) or 0)
+    assessment_rank = int(member_state.get("assessment_rank", 0) or 0)
+    missions_completed = int(member_state.get("missions_completed", 0) or 0)
+    resources_mined = int(member_state.get("resources_mined", 0) or 0)
+    alliance_helps_sent = int(member_state.get("alliance_helps_sent", 0) or 0)
 
     now = datetime.now(timezone.utc)
     start_of_today = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
-    power_today = _member_power_at_or_before(alliance_id, member.name, start_of_today)
-    power_7 = _member_power_at_or_before(alliance_id, member.name, now - timedelta(days=7))
-    power_30 = _member_power_at_or_before(alliance_id, member.name, now - timedelta(days=30))
+    stats_today = _member_stat_at_or_before(alliance_id, member.name, start_of_today)
+    stats_7 = _member_stat_at_or_before(alliance_id, member.name, now - timedelta(days=7))
+    stats_30 = _member_stat_at_or_before(alliance_id, member.name, now - timedelta(days=30))
     last_join_dt = _parse_report_timestamp(member.last_join_date)
     power_since_join = (
-        _member_power_at_or_before(alliance_id, member.name, last_join_dt)
+        _member_stat_at_or_before(alliance_id, member.name, last_join_dt).get("power")
         if last_join_dt
         else None
     )
@@ -422,11 +433,18 @@ def handle_service_record(
         member.name = display_name
     message = service_record_command(
         member,
-        power=current_power,
-        power_since_join=_power_gain(current_power, power_since_join),
-        power_today=_power_gain(current_power, power_today),
-        power_7=_power_gain(current_power, power_7),
-        power_30=_power_gain(current_power, power_30),
+        power=max_power or current_power,
+        max_power=max_power,
+        power_destroyed=power_destroyed,
+        arena_rating=arena_rating,
+        assessment_rank=assessment_rank,
+        missions_completed=missions_completed,
+        resources_mined=resources_mined,
+        alliance_helps_sent=alliance_helps_sent,
+        power_since_join=_stat_gain(current_power, power_since_join),
+        power_today=_stat_gain(current_power, stats_today.get("power")),
+        power_7=_stat_gain(current_power, stats_7.get("power")),
+        power_30=_stat_gain(current_power, stats_30.get("power")),
         contributions_total=contributions_total,
         contributions_30=contributions_30,
         contributions_7=contributions_7,

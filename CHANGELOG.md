@@ -161,5 +161,10 @@
 
 ## v3.2a
 - Fix: Added test mode webhook msg's when each file is processed.  added example test files.
+## 3.6
+- Scrape member detail pages to capture max power and expanded per-player stats.
+- Use max power for service record power output when available.
+- Include resources mined deltas in service record contribution windows.
+
 ## Unreleased
 - None yet.
