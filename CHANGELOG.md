@@ -179,3 +179,8 @@
 
 ## Unreleased
 - None yet.
+
+## v3.7c
+- Format numeric values in report tables with comma separators.
+- Fix service record join date parsing for ISO-like timestamps.
+- Remove interim report period option from slash command.

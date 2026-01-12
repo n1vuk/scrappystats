@@ -17,7 +17,8 @@ def _format_timestamp(raw: str | None) -> str:
     if not raw:
         return "Unknown"
     value = str(raw).strip()
-    value = value.replace(" ", "T")
+    if "T" not in value and " " in value and "-" in value.split(" ", 1)[0]:
+        value = value.replace(" ", "T", 1)
     if value.endswith("Z") and "+" in value:
         value = value[:-1]
     try:
@@ -43,7 +44,8 @@ def _format_join_date(raw: str | None) -> str:
     if isinstance(raw, (int, float)):
         return datetime.fromtimestamp(raw, tz=timezone.utc).strftime("%b %d, %Y")
     value = str(raw).strip()
-    value = value.replace(" ", "T")
+    if "T" not in value and " " in value and "-" in value.split(" ", 1)[0]:
+        value = value.replace(" ", "T", 1)
     if value.endswith("Z") and "+" in value:
         value = value[:-1]
     try:

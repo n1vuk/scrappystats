@@ -25,7 +25,6 @@ configure_logging()
 
 app = FastAPI()
 START_TIME = utcnow()
-INTERIM_PERIOD_OPTIONS = ("interim", "daily", "weekly")
 
 ## Check for valid config file and fail if one is not found
 load_config(fatal=True)
@@ -73,15 +72,6 @@ COMMANDS = [
                 "type": 1,
                 "name": "interimreport",
                 "description": "Show the interim alliance report.",
-                "options": [
-                    {
-                        "type": 3,
-                        "name": "period",
-                        "description": "Report period to run.",
-                        "required": False,
-                        "autocomplete": True,
-                    }
-                ],
             },
             {"type": 1, "name": "forcepull", "description": "Force Scrappy to fetch new data."},
             {"type": 1, "name": "pullhistory", "description": "Show the last 5 data pulls."},
@@ -245,33 +235,11 @@ def _find_focused_option(options: list[dict]) -> tuple[dict | None, str | None]:
     return None, None
 
 
-def _find_option(options: list[dict], name: str) -> dict | None:
-    for opt in options:
-        if opt.get("name") == name:
-            return opt
-        nested = opt.get("options") or []
-        found = _find_option(nested, name)
-        if found:
-            return found
-    return None
-
-
 def _find_subcommand_name(options: list[dict]) -> str | None:
     for opt in options:
         if opt.get("options"):
             return opt.get("name")
     return None
-
-
-def _autocomplete_period_options(query: str, options: tuple[str, ...]) -> list[dict]:
-    if not query:
-        return [{"name": option, "value": option} for option in options]
-    needle = query.lower()
-    return [
-        {"name": option, "value": option}
-        for option in options
-        if needle in option.lower()
-    ]
 
 
 # ─────────────────────────────────────────────
@@ -348,14 +316,8 @@ async def interactions(request: Request):
                     "weeklyreport",
                 }:
                     choices = handle_player_autocomplete(payload, query)
-            elif option_name == "period":
-                choices = _autocomplete_period_options(query, INTERIM_PERIOD_OPTIONS)
         if not focused or sub_name is None:
             sub_name = _find_subcommand_name(options)
-        if sub_name == "interimreport" and (not focused or focused.get("name") == "period"):
-            period_option = _find_option(options, "period") or {}
-            query = period_option.get("value") or ""
-            choices = _autocomplete_period_options(query, INTERIM_PERIOD_OPTIONS)
         return JSONResponse({"type": 8, "data": {"choices": choices}})
 
     return JSONResponse({"error": "Unsupported interaction type"}, status_code=400)
