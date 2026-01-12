@@ -459,7 +459,12 @@ def fetch_alliance_roster(
     *,
     debug: bool = False,
     scrape_stamp: str | None = None,
+    include_member_details: bool | None = None,
 ) -> List[dict]:
+    if include_member_details is None:
+        include_member_details = str(
+            os.getenv("SCRAPPYSTATS_FETCH_MEMBER_DETAILS", "0")
+        ).lower() in {"1", "true", "yes", "y"}
     html = fetch_alliance_page(alliance_id)
     if debug:
         try:
@@ -471,6 +476,8 @@ def fetch_alliance_roster(
     members = list(roster.values())
     saved_sample = False
     for member in members:
+        if not include_member_details:
+            continue
         detail_url = member.get("detail_url")
         player_id = member.get("player_id")
         if not detail_url and not player_id:

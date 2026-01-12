@@ -1,3 +1,8 @@
+## 4.0.0c
+- Split member detail pulls into a slow background worker with configurable cadence.
+- Preserve member detail stats between roster syncs and prioritize detail refresh for joins/rejoins.
+- Add worker cron entry and on-demand overrides for member detail refresh.
+
 ## 4.0.0b
 - Add request throttling with configurable minimum intervals.
 - Retry STFC API calls with backoff and respect Retry-After on 429/503 responses.

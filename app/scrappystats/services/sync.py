@@ -17,6 +17,7 @@ from ..models.member import Member
 from .detection import detect_member_events
 from .service_record import add_service_event
 from .events import dispatch_webhook_events
+from .member_details import queue_member_detail_refresh
 
 log = logging.getLogger(__name__)
 
@@ -119,6 +120,11 @@ def _combine_join_date(join_date: str | None, scrape_timestamp: str) -> str | No
 def _clone_member(member: Member) -> Member:
     return Member.from_json(member.to_json())
 
+def _scraped_value(scraped: dict, key: str, fallback):
+    if key in scraped and scraped[key] is not None:
+        return scraped[key]
+    return fallback
+
 
 def sync_alliance(alliance_cfg: dict) -> bool:
     """Run a single sync for one alliance.
@@ -158,22 +164,50 @@ def sync_alliance(alliance_cfg: dict) -> bool:
     for scraped in scraped_members:
         name = scraped["name"]
         scraped_player_id = scraped.get("player_id")
-        power_value = scraped.get("max_power")
-        if power_value is None:
-            power_value = scraped.get("power", 0) or 0
+        prev_stats = prev_service_state.get(name, {}) or {}
+        power_value = _scraped_value(scraped, "power", prev_stats.get("power", 0)) or 0
+        max_power = _scraped_value(scraped, "max_power", prev_stats.get("max_power"))
+        if max_power is None:
+            max_power = power_value
+        if max_power is not None:
+            power_value = max_power
         service_state[name] = {
             "player_id": scraped_player_id,
-            "helps": scraped.get("helps", 0) or 0,
-            "rss": scraped.get("rss", 0) or 0,
-            "iso": scraped.get("iso", 0) or 0,
+            "helps": _scraped_value(scraped, "helps", prev_stats.get("helps", 0)) or 0,
+            "rss": _scraped_value(scraped, "rss", prev_stats.get("rss", 0)) or 0,
+            "iso": _scraped_value(scraped, "iso", prev_stats.get("iso", 0)) or 0,
             "power": power_value,
-            "max_power": scraped.get("max_power", power_value) or 0,
-            "power_destroyed": scraped.get("power_destroyed", 0) or 0,
-            "arena_rating": scraped.get("arena_rating", 0) or 0,
-            "assessment_rank": scraped.get("assessment_rank", 0) or 0,
-            "missions_completed": scraped.get("missions_completed", 0) or 0,
-            "resources_mined": scraped.get("resources_mined", 0) or 0,
-            "alliance_helps_sent": scraped.get("alliance_helps_sent", 0) or 0,
+            "max_power": max_power or 0,
+            "power_destroyed": _scraped_value(
+                scraped,
+                "power_destroyed",
+                prev_stats.get("power_destroyed", 0),
+            ) or 0,
+            "arena_rating": _scraped_value(
+                scraped,
+                "arena_rating",
+                prev_stats.get("arena_rating", 0),
+            ) or 0,
+            "assessment_rank": _scraped_value(
+                scraped,
+                "assessment_rank",
+                prev_stats.get("assessment_rank", 0),
+            ) or 0,
+            "missions_completed": _scraped_value(
+                scraped,
+                "missions_completed",
+                prev_stats.get("missions_completed", 0),
+            ) or 0,
+            "resources_mined": _scraped_value(
+                scraped,
+                "resources_mined",
+                prev_stats.get("resources_mined", 0),
+            ) or 0,
+            "alliance_helps_sent": _scraped_value(
+                scraped,
+                "alliance_helps_sent",
+                prev_stats.get("alliance_helps_sent", 0),
+            ) or 0,
         }
         # Try to find an existing member by player_id first, then by name
         match_uuid = None
@@ -220,6 +254,8 @@ def sync_alliance(alliance_cfg: dict) -> bool:
             m_json = initialize_member(scraped, scrape_timestamp)
             m = Member.from_json(m_json)
             curr_members[m.uuid] = m
+            if scraped_player_id is not None:
+                queue_member_detail_refresh(alliance_id, str(scraped_player_id), front=True)
 
     data_changed = service_state != prev_service_state
 
@@ -288,6 +324,12 @@ def sync_alliance(alliance_cfg: dict) -> bool:
             "rejoin",
             last_leave=ev["last_leave"],
         )
+        if getattr(ev["member"], "player_id", None) is not None:
+            queue_member_detail_refresh(
+                alliance_id,
+                str(ev["member"].player_id),
+                front=True,
+            )
 
     # Prepare a flat list of events for webhook dispatch
     event_batch = []
