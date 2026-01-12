@@ -209,9 +209,10 @@ def _update_member_detail(
         if member_detail_verbose():
             log.info("No detail stats returned for %s (%s).", member.name, player_id)
         detail_log.info(
-            "Member detail empty response url=%s status=%s headers=%s payload=%s",
+            "Member detail empty response url=%s status=%s decoded=%s headers=%s payload=%s",
             meta.get("url"),
             meta.get("status"),
+            meta.get("decoded"),
             json.dumps(meta.get("headers", {}), ensure_ascii=True, sort_keys=True, indent=2),
             json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2),
         )

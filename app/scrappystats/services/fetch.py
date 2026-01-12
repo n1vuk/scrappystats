@@ -1,9 +1,11 @@
 """Fetch alliance roster data from STFC.pro (v2 pipeline)."""
+import base64
 import json
 import logging
 import os
 import re
 import time
+import zlib
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urljoin
@@ -22,11 +24,15 @@ member_detail_log = logging.getLogger("scrappystats.member_detail_payload")
 
 BASE_URL = "https://stfc.pro/alliance/"
 ROOT_URL = "https://stfc.pro"
+STFCPRO_COOKIE = os.getenv("SCRAPPYSTATS_STFCPRO_COOKIE")
+STFCPRO_USER_AGENT = os.getenv("SCRAPPYSTATS_STFCPRO_USER_AGENT")
+LOG_SET_COOKIE = os.getenv("SCRAPPYSTATS_LOG_SET_COOKIE", "0") == "1"
 
 REQUEST_MIN_INTERVAL = float(os.getenv("SCRAPPYSTATS_REQUEST_MIN_INTERVAL", "0.5") or 0.5)
 REQUEST_RETRIES = int(os.getenv("SCRAPPYSTATS_REQUEST_RETRIES", "2") or 2)
 REQUEST_BACKOFF_BASE = float(os.getenv("SCRAPPYSTATS_REQUEST_BACKOFF_BASE", "1.0") or 1.0)
 _LAST_REQUEST_TS = 0.0
+_SESSION = requests.Session()
 
 
 def _sleep_if_needed() -> None:
@@ -40,11 +46,35 @@ def _sleep_if_needed() -> None:
     _LAST_REQUEST_TS = time.monotonic()
 
 
+def _stfc_headers(headers: dict) -> dict:
+    merged = dict(headers)
+    if STFCPRO_USER_AGENT:
+        merged.setdefault("User-Agent", STFCPRO_USER_AGENT)
+    if STFCPRO_COOKIE:
+        merged.setdefault("Cookie", STFCPRO_COOKIE)
+    return merged
+
+
+def _log_session_cookies(context: str) -> None:
+    if not LOG_SET_COOKIE:
+        return
+    jar = _SESSION.cookies
+    names = sorted({cookie.name for cookie in jar})
+    if not names:
+        log.info("Session cookies after %s: (none)", context)
+        return
+    log.info("Session cookies after %s: %s", context, ", ".join(names))
+
+
 def _get_with_backoff(url: str, *, headers: dict, timeout: int) -> requests.Response:
     attempt = 0
     while True:
         _sleep_if_needed()
-        resp = requests.get(url, timeout=timeout, headers=headers)
+        resp = _SESSION.get(url, timeout=timeout, headers=headers)
+        if LOG_SET_COOKIE:
+            set_cookie = resp.headers.get("Set-Cookie")
+            if set_cookie:
+                log.info("Set-Cookie from %s: %s", url, set_cookie)
         if resp.status_code not in (429, 503):
             resp.raise_for_status()
             return resp
@@ -71,11 +101,12 @@ def fetch_alliance_page(alliance_id: str) -> str:
     resp = _get_with_backoff(
         url,
         timeout=30,
-        headers={
+        headers=_stfc_headers({
             "Accept": "text/html,application/xhtml+xml",
             "Accept-Language": "en-US,en;q=0.9",
-        },
+        }),
     )
+    _log_session_cookies(f"fetching {url}")
     return resp.text
 
 
@@ -157,10 +188,10 @@ def fetch_member_detail_html(detail_url: str) -> str:
     resp = _get_with_backoff(
         url,
         timeout=30,
-        headers={
+        headers=_stfc_headers({
             "Accept": "text/html,application/xhtml+xml",
             "Accept-Language": "en-US,en;q=0.9",
-        },
+        }),
     )
     return resp.text
 
@@ -180,7 +211,61 @@ def _coerce_int(value) -> Optional[int]:
     return None
 
 
-def _find_payload_candidate(payload: dict) -> dict:
+def _decode_member_details_data(encoded: str) -> dict | list | None:
+    try:
+        raw = base64.b64decode(encoded)
+    except Exception:
+        return None
+    inflated = None
+    for wbits in (zlib.MAX_WBITS, -zlib.MAX_WBITS, zlib.MAX_WBITS + 32):
+        try:
+            inflated = zlib.decompress(raw, wbits)
+            break
+        except zlib.error:
+            continue
+    if inflated is None:
+        return None
+    try:
+        text = inflated.decode("utf-8")
+    except UnicodeDecodeError:
+        text = inflated.decode("utf-8", errors="replace")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
+def _find_payload_candidate(payload) -> dict:
+    if isinstance(payload, list):
+        preferred_keys = (
+            "power",
+            "maxPower",
+            "max_power",
+            "powerDestroyed",
+            "power_destroyed",
+            "arenaRating",
+            "arena_rating",
+            "assessmentRank",
+            "assessment_rank",
+            "missionsCompleted",
+            "missions_completed",
+            "resourcesMined",
+            "resources_mined",
+            "allianceHelpsSent",
+            "alliance_helps_sent",
+        )
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            for key in preferred_keys:
+                if key in item:
+                    return item
+        for item in payload:
+            if isinstance(item, dict) and item:
+                return item
+        return {}
+    if not isinstance(payload, dict):
+        return {}
     for key in ("player", "data", "result", "playerDetails", "details"):
         value = payload.get(key)
         if isinstance(value, dict):
@@ -201,7 +286,7 @@ def _payload_value(payload: dict, *keys: str):
     return None
 
 
-def parse_member_details_payload(payload: dict) -> dict:
+def parse_member_details_payload(payload) -> dict:
     candidate = _find_payload_candidate(payload)
     stats = {
         "power": _coerce_int(_payload_value(candidate, "power")),
@@ -223,18 +308,25 @@ def fetch_member_details_api(player_id: str) -> Tuple[dict, Optional[dict], dict
     resp = _get_with_backoff(
         url,
         timeout=30,
-        headers={
+        headers=_stfc_headers({
             "Accept": "application/json",
             "Accept-Language": "en-US,en;q=0.9",
-        },
+        }),
     )
     payload = resp.json()
+    decoded_payload = None
+    if isinstance(payload, dict):
+        encoded = payload.get("data")
+        if isinstance(encoded, str):
+            decoded_payload = _decode_member_details_data(encoded)
+    payload_for_parse = decoded_payload if decoded_payload is not None else payload
     meta = {
         "url": url,
         "status": resp.status_code,
         "headers": dict(resp.headers),
+        "decoded": decoded_payload is not None,
     }
-    return parse_member_details_payload(payload), payload, meta
+    return parse_member_details_payload(payload_for_parse), payload_for_parse, meta
 
 
 def _player_detail_url(player_id: str) -> str:

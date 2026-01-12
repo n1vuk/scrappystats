@@ -7,7 +7,8 @@ RUN apt-get update && \
 WORKDIR /app
 COPY VERSION /app/VERSION
 COPY app/scrappystats ./scrappystats
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app \
+    SCRAPPYSTATS_LOG_SET_COOKIE=1
 
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt

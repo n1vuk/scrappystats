@@ -1,3 +1,8 @@
+## 4.0.0g
+- Decode member detail payloads returned as base64+deflate and parse stats again.
+- Reuse a shared session for STFC requests and log Set-Cookie/session cookie names when enabled.
+- Add optional STFC cookie/UA headers and include decoded flag in member detail logs.
+
 ## 4.0.0f
 - Add verbose member detail logging with a config toggle.
 - Save player HTML during API fallback for member detail debugging.
