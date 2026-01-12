@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -9,6 +10,7 @@ from ..utils import iso_now, load_json, save_json, state_path as report_state_pa
 from .fetch import fetch_member_details_api
 
 log = logging.getLogger("scrappystats.member_details")
+detail_log = logging.getLogger("scrappystats.member_detail_payload")
 
 DETAIL_INTERVAL_HOURS = float(os.getenv("SCRAPPYSTATS_MEMBER_DETAIL_INTERVAL_HOURS", "60") or 60)
 DETAILS_PER_RUN = int(os.getenv("SCRAPPYSTATS_MEMBER_DETAIL_PER_RUN", "1") or 1)
@@ -183,9 +185,14 @@ def _update_member_detail(
         return False
 
     try:
-        detail_stats, _payload = fetch_member_details_api(str(player_id))
+        detail_stats, payload, meta = fetch_member_details_api(str(player_id))
     except Exception as exc:
         log.warning("Member detail fetch failed for %s: %s", player_id, exc)
+        detail_log.warning(
+            "Member detail fetch failed url=%s error=%s",
+            f"https://stfc.pro/api/playerDetails?playerid={player_id}",
+            exc,
+        )
         entry["last_error"] = str(exc)
         detail_state[str(player_id)] = entry
         state[DETAIL_STATE_KEY] = detail_state
@@ -194,6 +201,13 @@ def _update_member_detail(
 
     if not detail_stats:
         log.info("No detail stats returned for %s.", player_id)
+        detail_log.info(
+            "Member detail empty response url=%s status=%s headers=%s payload=%s",
+            meta.get("url"),
+            meta.get("status"),
+            json.dumps(meta.get("headers", {}), ensure_ascii=True, sort_keys=True, indent=2),
+            json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2),
+        )
         return False
 
     member_state = service_state.get(member.name, {}) or {}

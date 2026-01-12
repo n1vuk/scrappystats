@@ -17,6 +17,7 @@ from scrappystats.utils import save_raw_html, save_raw_json
 configure_logging()
 
 log = logging.getLogger("scrappystats.fetch")
+member_detail_log = logging.getLogger("scrappystats.member_detail_payload")
 
 BASE_URL = "https://stfc.pro/alliance/"
 ROOT_URL = "https://stfc.pro"
@@ -216,7 +217,7 @@ def parse_member_details_payload(payload: dict) -> dict:
     return {key: value for key, value in stats.items() if value is not None}
 
 
-def fetch_member_details_api(player_id: str) -> Tuple[dict, Optional[dict]]:
+def fetch_member_details_api(player_id: str) -> Tuple[dict, Optional[dict], dict]:
     url = f"{ROOT_URL}/api/playerDetails?playerid={player_id}"
     resp = _get_with_backoff(
         url,
@@ -227,7 +228,12 @@ def fetch_member_details_api(player_id: str) -> Tuple[dict, Optional[dict]]:
         },
     )
     payload = resp.json()
-    return parse_member_details_payload(payload), payload
+    meta = {
+        "url": url,
+        "status": resp.status_code,
+        "headers": dict(resp.headers),
+    }
+    return parse_member_details_payload(payload), payload, meta
 
 
 def _header_cells(table) -> list[str]:
@@ -484,7 +490,7 @@ def fetch_alliance_roster(
             continue
         try:
             if player_id:
-                detail_stats, detail_payload = fetch_member_details_api(player_id)
+                detail_stats, detail_payload, _meta = fetch_member_details_api(player_id)
                 if not saved_sample and scrape_stamp:
                     sample_stamp = _member_sample_stamp(scrape_stamp, member.get("name", "member"))
                     if detail_payload is not None:

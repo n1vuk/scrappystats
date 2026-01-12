@@ -32,3 +32,16 @@ def configure_logging(level: Optional[int] = None) -> None:
         log.warning("Failed to initialize log file in %s", DEFAULT_LOG_DIR)
 
     logging.basicConfig(level=resolved, format=DEFAULT_LOG_FORMAT, handlers=handlers)
+
+    detail_logger = logging.getLogger("scrappystats.member_detail_payload")
+    if not any(isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", "").endswith("member_detail.log")
+               for h in detail_logger.handlers):
+        try:
+            detail_handler = logging.FileHandler(DEFAULT_LOG_DIR / "member_detail.log")
+            detail_handler.setFormatter(logging.Formatter(DEFAULT_LOG_FORMAT))
+            detail_handler.setLevel(logging.DEBUG)
+            detail_logger.addHandler(detail_handler)
+            detail_logger.setLevel(logging.DEBUG)
+            detail_logger.propagate = False
+        except OSError:
+            log.warning("Failed to initialize member detail log file in %s", DEFAULT_LOG_DIR)

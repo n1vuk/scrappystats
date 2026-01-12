@@ -1,3 +1,7 @@
+## 4.0.0d
+- Log member detail failures to a dedicated log with URL/status/headers/payload (pretty-printed JSON).
+- Add a separate member_detail.log file target for member detail debug data.
+
 ## 4.0.0c
 - Split member detail pulls into a slow background worker with configurable cadence.
 - Preserve member detail stats between roster syncs and prioritize detail refresh for joins/rejoins.
