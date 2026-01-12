@@ -11,6 +11,7 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 
+from scrappystats.config import member_detail_verbose
 from scrappystats.log import configure_logging
 from scrappystats.utils import save_raw_html, save_raw_json
 
@@ -240,13 +241,48 @@ def _player_detail_url(player_id: str) -> str:
     return f"{ROOT_URL}/player/{player_id}"
 
 
-def fetch_member_details(player_id: str) -> Tuple[dict, Optional[dict], dict]:
-    detail_stats, payload, meta = fetch_member_details_api(player_id)
+def fetch_member_details(
+    player_id: str,
+    *,
+    player_name: str | None = None,
+) -> Tuple[dict, Optional[dict], dict]:
+    label = f"{player_name} ({player_id})" if player_name else str(player_id)
+    if member_detail_verbose():
+        log.info("Member detail fetch start for %s.", label)
+    try:
+        detail_stats, payload, meta = fetch_member_details_api(player_id)
+    except Exception:
+        if member_detail_verbose():
+            log.warning("Member detail API fetch failed for %s.", label, exc_info=True)
+        raise
+    if member_detail_verbose():
+        log.info(
+            "Member detail API response for %s: %s stat(s).",
+            label,
+            len(detail_stats),
+        )
     if detail_stats:
         return detail_stats, payload, meta
     try:
-        detail_stats = fetch_member_stats(_player_detail_url(player_id))
+        if member_detail_verbose():
+            log.info(
+                "Member detail API empty for %s; attempting HTML fetch at %s",
+                label,
+                _player_detail_url(player_id),
+            )
+        detail_html = fetch_member_detail_html(_player_detail_url(player_id))
+        if member_detail_verbose():
+            html_path = save_raw_html(f"player_{player_id}", detail_html)
+            log.info("Saved member detail HTML for %s to %s", label, html_path)
+        detail_stats = parse_member_stats(detail_html)
+        if member_detail_verbose():
+            if detail_stats:
+                log.info("Member detail HTML parsed %s stat(s) for %s.", len(detail_stats), label)
+            else:
+                log.info("Member detail HTML returned no parsable stats for %s.", label)
     except Exception:
+        if member_detail_verbose():
+            log.warning("Member detail HTML fetch failed for %s.", label, exc_info=True)
         return {}, payload, meta
     return detail_stats, payload, meta
 
@@ -505,7 +541,10 @@ def fetch_alliance_roster(
             continue
         try:
             if player_id:
-                detail_stats, detail_payload, _meta = fetch_member_details(player_id)
+                detail_stats, detail_payload, _meta = fetch_member_details(
+                    player_id,
+                    player_name=member.get("name"),
+                )
                 if not saved_sample and scrape_stamp:
                     sample_stamp = _member_sample_stamp(scrape_stamp, member.get("name", "member"))
                     if detail_payload is not None:

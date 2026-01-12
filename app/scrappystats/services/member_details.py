@@ -3,7 +3,7 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
-from ..config import load_config, list_alliances
+from ..config import load_config, list_alliances, member_detail_verbose
 from ..models.member import Member
 from ..storage.state import load_state, save_state
 from ..utils import iso_now, load_json, save_json, state_path as report_state_path
@@ -171,6 +171,8 @@ def _update_member_detail(
     player_id: str,
     member: Member,
 ) -> bool:
+    if member_detail_verbose():
+        log.info("Member detail attempt start for %s (%s).", member.name, player_id)
     state = load_state(alliance_id)
     detail_state = state.get(DETAIL_STATE_KEY) or {}
     entry = detail_state.get(str(player_id)) or {}
@@ -185,9 +187,13 @@ def _update_member_detail(
         return False
 
     try:
-        detail_stats, payload, meta = fetch_member_details(str(player_id))
+        detail_stats, payload, meta = fetch_member_details(
+            str(player_id),
+            player_name=member.name,
+        )
     except Exception as exc:
-        log.warning("Member detail fetch failed for %s: %s", player_id, exc)
+        if member_detail_verbose():
+            log.warning("Member detail fetch failed for %s (%s): %s", member.name, player_id, exc)
         detail_log.warning(
             "Member detail fetch failed url=%s error=%s",
             f"https://stfc.pro/api/playerDetails?playerid={player_id}",
@@ -200,7 +206,8 @@ def _update_member_detail(
         return False
 
     if not detail_stats:
-        log.info("No detail stats returned for %s.", player_id)
+        if member_detail_verbose():
+            log.info("No detail stats returned for %s (%s).", member.name, player_id)
         detail_log.info(
             "Member detail empty response url=%s status=%s headers=%s payload=%s",
             meta.get("url"),
@@ -222,6 +229,8 @@ def _update_member_detail(
     detail_state[str(player_id)] = entry
     state[DETAIL_STATE_KEY] = detail_state
     save_state(alliance_id, state)
+    if member_detail_verbose():
+        log.info("Member detail update succeeded for %s (%s).", member.name, player_id)
     return True
 
 

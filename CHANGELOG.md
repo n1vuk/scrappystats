@@ -1,3 +1,7 @@
+## 4.0.0f
+- Add verbose member detail logging with a config toggle.
+- Save player HTML during API fallback for member detail debugging.
+
 ## 4.0.0e
 - Fallback to parsing player HTML when member detail API payloads no longer return stats.
 

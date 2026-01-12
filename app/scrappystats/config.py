@@ -54,6 +54,12 @@ def load_config(*, fatal: bool = False) -> dict:
         return {}
 
 
+def member_detail_verbose(config: dict | None = None) -> bool:
+    cfg = config if config is not None else load_config()
+    logging_cfg = cfg.get("logging") or {}
+    return bool(logging_cfg.get("member_detail_verbose", False))
+
+
 def iter_alliances(config: dict):
     guilds = config.get("guilds") or []
     if guilds:
