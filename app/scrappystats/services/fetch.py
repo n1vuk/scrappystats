@@ -610,10 +610,15 @@ def fetch_alliance_roster(
     scrape_stamp: str | None = None,
     include_member_details: bool | None = None,
 ) -> List[dict]:
+    member_details_enabled = str(
+        os.getenv("SCRAPPYSTATS_ENABLE_MEMBER_DETAILS", "0")
+    ).lower() in {"1", "true", "yes", "y"}
     if include_member_details is None:
         include_member_details = str(
             os.getenv("SCRAPPYSTATS_FETCH_MEMBER_DETAILS", "0")
         ).lower() in {"1", "true", "yes", "y"}
+    if not member_details_enabled:
+        include_member_details = False
     html = fetch_alliance_page(alliance_id)
     if debug:
         try:

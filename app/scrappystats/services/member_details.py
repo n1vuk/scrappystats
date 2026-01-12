@@ -15,6 +15,12 @@ detail_log = logging.getLogger("scrappystats.member_detail_payload")
 DETAIL_INTERVAL_HOURS = float(os.getenv("SCRAPPYSTATS_MEMBER_DETAIL_INTERVAL_HOURS", "60") or 60)
 DETAILS_PER_RUN = int(os.getenv("SCRAPPYSTATS_MEMBER_DETAIL_PER_RUN", "1") or 1)
 FAILURE_BACKOFF_MINUTES = float(os.getenv("SCRAPPYSTATS_MEMBER_DETAIL_FAILURE_BACKOFF_MINUTES", "30") or 30)
+MEMBER_DETAILS_ENABLED = str(os.getenv("SCRAPPYSTATS_ENABLE_MEMBER_DETAILS", "0")).lower() in {
+    "1",
+    "true",
+    "yes",
+    "y",
+}
 
 QUEUE_KEY = "member_detail_queue"
 DETAIL_STATE_KEY = "member_detail"
@@ -53,6 +59,8 @@ def _eligible_by_backoff(last_attempt: str | None) -> bool:
 
 
 def queue_member_detail_refresh(alliance_id: str, player_id: str, *, front: bool = False) -> None:
+    if not MEMBER_DETAILS_ENABLED:
+        return
     state = load_state(alliance_id)
     queue = list(state.get(QUEUE_KEY) or [])
     pid = str(player_id)
@@ -73,6 +81,8 @@ def set_member_detail_interval_override(
     player_id: str,
     interval_hours: float | None,
 ) -> None:
+    if not MEMBER_DETAILS_ENABLED:
+        return
     state = load_state(alliance_id)
     overrides = dict(state.get(OVERRIDE_KEY) or {})
     pid = str(player_id)
@@ -236,6 +246,9 @@ def _update_member_detail(
 
 
 def run_member_detail_worker(*, alliance_id: str | None = None, max_members: int | None = None) -> int:
+    if not MEMBER_DETAILS_ENABLED:
+        log.info("Member detail worker disabled; skipping detail refresh.")
+        return 0
     config = load_config()
     alliances = list_alliances(config)
     if alliance_id:

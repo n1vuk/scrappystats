@@ -8,7 +8,9 @@ WORKDIR /app
 COPY VERSION /app/VERSION
 COPY app/scrappystats ./scrappystats
 ENV PYTHONPATH=/app \
-    SCRAPPYSTATS_LOG_SET_COOKIE=1
+    SCRAPPYSTATS_LOG_SET_COOKIE=0 \
+    SCRAPPYSTATS_ENABLE_MEMBER_DETAILS=0 \
+    SCRAPPYSTATS_FETCH_MEMBER_DETAILS=0
 
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt

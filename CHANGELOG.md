@@ -1,3 +1,7 @@
+## 4.0.0h
+- Disable member detail pulls/worker unless explicitly enabled.
+- Turn off member detail cookie debug logging in the Docker image.
+
 ## 4.0.0g
 - Decode member detail payloads returned as base64+deflate and parse stats again.
 - Reuse a shared session for STFC requests and log Set-Cookie/session cookie names when enabled.
