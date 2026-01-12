@@ -1,3 +1,6 @@
+## 4.0.0e
+- Fallback to parsing player HTML when member detail API payloads no longer return stats.
+
 ## 4.0.0d
 - Log member detail failures to a dedicated log with URL/status/headers/payload (pretty-printed JSON).
 - Add a separate member_detail.log file target for member detail debug data.

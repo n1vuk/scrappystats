@@ -236,6 +236,21 @@ def fetch_member_details_api(player_id: str) -> Tuple[dict, Optional[dict], dict
     return parse_member_details_payload(payload), payload, meta
 
 
+def _player_detail_url(player_id: str) -> str:
+    return f"{ROOT_URL}/player/{player_id}"
+
+
+def fetch_member_details(player_id: str) -> Tuple[dict, Optional[dict], dict]:
+    detail_stats, payload, meta = fetch_member_details_api(player_id)
+    if detail_stats:
+        return detail_stats, payload, meta
+    try:
+        detail_stats = fetch_member_stats(_player_detail_url(player_id))
+    except Exception:
+        return {}, payload, meta
+    return detail_stats, payload, meta
+
+
 def _header_cells(table) -> list[str]:
     header_row = None
     thead = table.find("thead")
@@ -490,7 +505,7 @@ def fetch_alliance_roster(
             continue
         try:
             if player_id:
-                detail_stats, detail_payload, _meta = fetch_member_details_api(player_id)
+                detail_stats, detail_payload, _meta = fetch_member_details(player_id)
                 if not saved_sample and scrape_stamp:
                     sample_stamp = _member_sample_stamp(scrape_stamp, member.get("name", "member"))
                     if detail_payload is not None:

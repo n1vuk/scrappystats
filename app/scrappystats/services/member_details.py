@@ -7,7 +7,7 @@ from ..config import load_config, list_alliances
 from ..models.member import Member
 from ..storage.state import load_state, save_state
 from ..utils import iso_now, load_json, save_json, state_path as report_state_path
-from .fetch import fetch_member_details_api
+from .fetch import fetch_member_details
 
 log = logging.getLogger("scrappystats.member_details")
 detail_log = logging.getLogger("scrappystats.member_detail_payload")
@@ -185,7 +185,7 @@ def _update_member_detail(
         return False
 
     try:
-        detail_stats, payload, meta = fetch_member_details_api(str(player_id))
+        detail_stats, payload, meta = fetch_member_details(str(player_id))
     except Exception as exc:
         log.warning("Member detail fetch failed for %s: %s", player_id, exc)
         detail_log.warning(
