@@ -1,3 +1,7 @@
+## 4.0.0b
+- Add request throttling with configurable minimum intervals.
+- Retry STFC API calls with backoff and respect Retry-After on 429/503 responses.
+
 ## 4.0.0a
 - Track STFC player_id as the stable identity for members and use it to match joins/leaves/renames.
 - Scrape alliance Nuxt payloads for player_id and prefer the playerDetails API for member stats when available.

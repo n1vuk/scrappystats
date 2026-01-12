@@ -1,7 +1,9 @@
 """Fetch alliance roster data from STFC.pro (v2 pipeline)."""
 import json
 import logging
+import os
 import re
+import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urljoin
@@ -19,11 +21,52 @@ log = logging.getLogger("scrappystats.fetch")
 BASE_URL = "https://stfc.pro/alliance/"
 ROOT_URL = "https://stfc.pro"
 
+REQUEST_MIN_INTERVAL = float(os.getenv("SCRAPPYSTATS_REQUEST_MIN_INTERVAL", "0.5") or 0.5)
+REQUEST_RETRIES = int(os.getenv("SCRAPPYSTATS_REQUEST_RETRIES", "2") or 2)
+REQUEST_BACKOFF_BASE = float(os.getenv("SCRAPPYSTATS_REQUEST_BACKOFF_BASE", "1.0") or 1.0)
+_LAST_REQUEST_TS = 0.0
+
+
+def _sleep_if_needed() -> None:
+    global _LAST_REQUEST_TS
+    if REQUEST_MIN_INTERVAL <= 0:
+        return
+    now = time.monotonic()
+    elapsed = now - _LAST_REQUEST_TS
+    if elapsed < REQUEST_MIN_INTERVAL:
+        time.sleep(REQUEST_MIN_INTERVAL - elapsed)
+    _LAST_REQUEST_TS = time.monotonic()
+
+
+def _get_with_backoff(url: str, *, headers: dict, timeout: int) -> requests.Response:
+    attempt = 0
+    while True:
+        _sleep_if_needed()
+        resp = requests.get(url, timeout=timeout, headers=headers)
+        if resp.status_code not in (429, 503):
+            resp.raise_for_status()
+            return resp
+
+        if attempt >= REQUEST_RETRIES:
+            resp.raise_for_status()
+            return resp
+
+        retry_after = resp.headers.get("Retry-After")
+        try:
+            delay = float(retry_after) if retry_after else None
+        except ValueError:
+            delay = None
+        if delay is None:
+            delay = REQUEST_BACKOFF_BASE * (2 ** attempt)
+        log.warning("Throttled by %s (status %s); sleeping %.1fs", url, resp.status_code, delay)
+        time.sleep(delay)
+        attempt += 1
+
 
 def fetch_alliance_page(alliance_id: str) -> str:
     url = BASE_URL + alliance_id
     log.info("Fetching %s", url)
-    resp = requests.get(
+    resp = _get_with_backoff(
         url,
         timeout=30,
         headers={
@@ -31,7 +74,6 @@ def fetch_alliance_page(alliance_id: str) -> str:
             "Accept-Language": "en-US,en;q=0.9",
         },
     )
-    resp.raise_for_status()
     return resp.text
 
 
@@ -110,7 +152,7 @@ def fetch_member_detail_html(detail_url: str) -> str:
     url = detail_url
     if not detail_url.startswith("http"):
         url = urljoin(ROOT_URL, detail_url)
-    resp = requests.get(
+    resp = _get_with_backoff(
         url,
         timeout=30,
         headers={
@@ -118,7 +160,6 @@ def fetch_member_detail_html(detail_url: str) -> str:
             "Accept-Language": "en-US,en;q=0.9",
         },
     )
-    resp.raise_for_status()
     return resp.text
 
 
@@ -177,7 +218,7 @@ def parse_member_details_payload(payload: dict) -> dict:
 
 def fetch_member_details_api(player_id: str) -> Tuple[dict, Optional[dict]]:
     url = f"{ROOT_URL}/api/playerDetails?playerid={player_id}"
-    resp = requests.get(
+    resp = _get_with_backoff(
         url,
         timeout=30,
         headers={
@@ -185,7 +226,6 @@ def fetch_member_details_api(player_id: str) -> Tuple[dict, Optional[dict]]:
             "Accept-Language": "en-US,en;q=0.9",
         },
     )
-    resp.raise_for_status()
     payload = resp.json()
     return parse_member_details_payload(payload), payload
 
